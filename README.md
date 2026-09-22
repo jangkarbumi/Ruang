@@ -6,7 +6,7 @@ Sistem manajemen reservasi dan pelaporan kerusakan fasilitas kampus berbasis web
 
 ---
 
-## 🚀 Menjalankan Environment Dev
+## Menjalankan Environment Dev
 
 ### Prasyarat
 - [Node.js](https://nodejs.org) >= 20
@@ -62,7 +62,7 @@ Buka [http://localhost:3000](http://localhost:3000) di browser.
 
 ---
 
-## 🗄️ Database & Prisma
+## Database & Prisma
 
 | Perintah | Keterangan |
 |---|---|
@@ -93,7 +93,7 @@ docker-compose.yml        # Definisi service PostgreSQL
 
 ---
 
-## 🔐 Autentikasi
+## Autentikasi
 
 Proyek menggunakan **Auth.js v5** (`next-auth@beta`) dengan:
 - **Provider**: Credentials (email + password)
@@ -102,7 +102,7 @@ Proyek menggunakan **Auth.js v5** (`next-auth@beta`) dengan:
 
 ---
 
-## 📋 Catatan Tim
+## Catatan Tim
 
 - **Jangan commit `.env`** — file ini ada di `.gitignore`. Gunakan `.env.example` sebagai template.
 - **Jalankan `npx prisma generate`** setelah `npm install` (otomatis via `postinstall` script).
