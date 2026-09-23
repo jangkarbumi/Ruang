@@ -1,26 +1,80 @@
-@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap');
+@import 'tailwindcss';
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Poppins', 'Inter', ui-sans-serif, sans-serif;
+
+  --color-navy-50: #f1f4fb;
+  --color-navy-100: #dde4f4;
+  --color-navy-500: #2f5bd0;
+  --color-navy-600: #2148b3;
+  --color-navy-700: #1a3a91;
+  --color-navy-800: #14285f;
+  --color-navy-900: #0d1b40;
+  --color-navy-950: #08132e;
+
+  --color-brand-blue: #2f6bff;
+
+  --color-ink: #101828;
+  --color-mute: #667085;
+  --color-hair: #e4e7ec;
+  --color-mist: #f6f8fb;
+
+  --color-ok: #12965a;
+  --color-ok-soft: #e7f6ee;
+  --color-err: #d92d20;
+  --color-err-soft: #fdeceb;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: var(--color-mist);
+}
+
+/* Hide scrollbars until scrolling */
+* {
+  scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+::selection {
+  background: var(--color-navy-900);
+  color: #fff;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-rise {
+  animation: rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+.animate-floaty {
+  animation: floaty 6s ease-in-out infinite;
 }
