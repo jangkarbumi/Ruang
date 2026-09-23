@@ -37,21 +37,21 @@ export default function Hero() {
           
           <div className="bg-white items-center rounded-full shadow-lg w-auto max-w-full flex flex-row relative z-20 translate-y-6">
             <div className="flex items-center gap-1 p-2">
-              <button className="flex items-center gap-2 bg-[#EBF3FF] text-[#0064D2] rounded-full px-6 py-2.5 font-bold text-sm shrink-0">
+              <Link href={'gedung'} className="flex items-center gap-2 bg-[#EBF3FF] text-[#0064D2] rounded-full px-6 py-2.5 font-bold text-sm shrink-0">
                 Gedung
-              </button>
-              <button className="flex items-center gap-2 hover:bg-gray-50 text-gray-600 rounded-full px-6 py-2.5 font-semibold text-sm shrink-0 transition">
+              </Link>
+              <Link href={'ruangan'} className="flex items-center gap-2 hover:bg-gray-50 text-gray-600 rounded-full px-6 py-2.5 font-semibold text-sm shrink-0 transition">
                 Ruangan
-              </button>
-              <button className="flex items-center gap-2 hover:bg-gray-50 text-gray-600 rounded-full px-6 py-2.5 font-semibold text-sm shrink-0 transition">
+              </Link>
+              <Link href={'laboratorium'} className="flex items-center gap-2 hover:bg-gray-50 text-gray-600 rounded-full px-6 py-2.5 font-semibold text-sm shrink-0 transition">
                 Laboratorium
-              </button>
-              <button className="flex items-center gap-2 hover:bg-gray-50 text-gray-600 rounded-full px-6 py-2.5 font-semibold text-sm shrink-0 transition">
+              </Link>
+              <Link href={'lapangan'} className="flex items-center gap-2 hover:bg-gray-50 text-gray-600 rounded-full px-6 py-2.5 font-semibold text-sm shrink-0 transition">
                 Lapangan
-              </button>
-              <button className="flex items-center gap-2 hover:bg-gray-50 text-gray-600 rounded-full px-6 py-2.5 font-semibold text-sm shrink-0 transition">
+              </Link>
+              <Link href={'aula'} className="flex items-center gap-2 hover:bg-gray-50 text-gray-600 rounded-full px-6 py-2.5 font-semibold text-sm shrink-0 transition">
                 Aula
-              </button>
+              </Link>
             </div>
           </div>
 
