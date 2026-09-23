@@ -35,7 +35,7 @@ export default function Hero() {
 
         <div className="relative w-full flex flex-col items-center mt-2">
           
-          <div className="bg-white items-center rounded-full shadow-lg w-auto max-w-full flex flex-row relative z-20 translate-y-6">
+          <div className="bg-white justify-center items-center w-170 rounded-full shadow-lg max-w-full flex relative z-20 translate-y-6">
             <div className="flex items-center gap-1 p-2">
               <Link href={'gedung'} className="flex items-center gap-2 bg-[#EBF3FF] text-[#0064D2] rounded-full px-6 py-2.5 font-bold text-sm shrink-0">
                 Gedung
