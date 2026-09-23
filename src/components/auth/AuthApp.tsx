@@ -18,7 +18,7 @@ export default function AuthApp({ initialView = 'login' }: { initialView?: View 
 
   return (
     <div className="flex min-h-screen w-full items-center justify-center bg-muted/20 p-0 sm:p-6">
-      <div className="w-full bg-background px-6 py-12 sm:rounded-3xl sm:px-10 sm:shadow-xl sm:border lg:px-14">
+      <div className="w-full max-w-130 bg-background px-6 py-12 sm:rounded-3xl sm:px-10 sm:shadow-xl sm:border lg:px-14">
         <div className="flex items-center justify-center">
           {view === 'dashboard' ? (
             <Dashboard onBack={() => setView('login')} />
@@ -86,7 +86,7 @@ function FormInput({
 }
 
 function FormShell({ children }: { children: React.ReactNode }) {
-  return <div className="w-full animate-in fade-in slide-in-from-bottom-2 duration-500">{children}</div>
+  return <div className="w-full max-w-100 animate-in fade-in slide-in-from-bottom-2 duration-500">{children}</div>
 }
 
 function Divider() {
