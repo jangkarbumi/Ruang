@@ -1,0 +1,115 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+//
+// Prisma v7: Konfigurasi datasource (URL koneksi) dipindah ke prisma.config.ts
+// Lihat: https://pris.ly/d/config-datasource
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────
+
+enum Role {
+  PENGGUNA
+  PETUGAS
+  ADMIN
+}
+
+enum AccountStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+}
+
+enum FacilityStatus {
+  AKTIF
+  PERBAIKAN
+  NONAKTIF
+}
+
+enum ReservationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ReportStatus {
+  BARU
+  DIPROSES
+  SELESAI
+  DITOLAK
+}
+
+// ─────────────────────────────────────────
+// Models
+// ─────────────────────────────────────────
+
+model User {
+  id            Int           @id @default(autoincrement())
+  name          String
+  email         String        @unique
+  password      String
+  role          Role
+  accountStatus AccountStatus @default(ACTIVE)
+  createdAt     DateTime      @default(now())
+
+  reservationsMade    Reservation[] @relation("MadeBy")
+  reservationsDecided Reservation[] @relation("DecidedBy")
+  reportsSubmitted    Report[]      @relation("ReportedBy")
+  reportsHandled      Report[]      @relation("HandledBy")
+}
+
+model Facility {
+  id          Int            @id @default(autoincrement())
+  name        String
+  type        String
+  location    String
+  capacity    Int
+  description String?
+  status      FacilityStatus @default(AKTIF)
+
+  reservations Reservation[]
+  reports      Report[]
+}
+
+model Reservation {
+  id                 Int               @id @default(autoincrement())
+  userId             Int
+  user               User              @relation("MadeBy", fields: [userId], references: [id])
+  facilityId         Int
+  facility           Facility          @relation(fields: [facilityId], references: [id])
+  startTime          DateTime
+  endTime            DateTime
+  purpose            String
+  status             ReservationStatus @default(PENDING)
+  cancellationReason String?
+  decidedById        Int?
+  decidedBy          User?             @relation("DecidedBy", fields: [decidedById], references: [id])
+  createdAt          DateTime          @default(now())
+
+  @@index([facilityId, startTime, endTime])
+}
+
+model Report {
+  id             Int          @id @default(autoincrement())
+  reporterId     Int
+  reporter       User         @relation("ReportedBy", fields: [reporterId], references: [id])
+  facilityId     Int
+  facility       Facility     @relation(fields: [facilityId], references: [id])
+  category       String
+  description    String
+  photo          String?
+  status         ReportStatus @default(BARU)
+  resolutionNote String?
+  handledById    Int?
+  handledBy      User?        @relation("HandledBy", fields: [handledById], references: [id])
+  createdAt      DateTime     @default(now())
+}
