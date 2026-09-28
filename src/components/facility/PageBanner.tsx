@@ -8,7 +8,7 @@ import Navbar from '@/components/Navbar';
 export default function PageBanner({ children, navbar }: { children: ReactNode; navbar?: ReactNode }) {
   return (
     <div 
-      className="relative bg-[#001741] bg-cover bg-center"
+      className="relative bg-[#001741] bg-cover bg-[center_65%]"
       style={{ backgroundImage: "url('/latar belakang bagian informasi tanpa login.jpg')" }}
     >
       <div className="absolute inset-0 bg-linear-to-b from-[#001741] via-[#001741]/85 to-[#001741]/70"></div>
