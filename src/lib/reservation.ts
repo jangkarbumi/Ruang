@@ -13,9 +13,13 @@ export interface Reservation {
   purpose: string;
   status: ReservationStatus;
   cancellationReason: string | null;
+  /** Alasan penolakan wajib diisi petugas saat menolak pengajuan. */
+  rejectionReason: string | null;
   decidedById: number | null;
   createdAt: Date;
 }
+
+export const REJECTION_REASON_MIN = 10;
 
 export const RESERVATION_STATUS: Record<ReservationStatus, { label: string; className: string }> = {
   PENDING: { label: 'Menunggu', className: 'bg-amber-100 text-amber-700' },

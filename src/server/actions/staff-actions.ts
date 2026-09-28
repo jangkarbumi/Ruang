@@ -32,7 +32,7 @@ export async function decideReservationAction(_prev: StaffActionState, fd: FormD
     decision === 'approve'
       ? await approveReservation(officer, id)
       : decision === 'reject'
-        ? await rejectReservation(officer, id)
+        ? await rejectReservation(officer, id, String(fd.get('reason') ?? ''))
         : decision === 'cancel'
           ? await cancelUrgent(officer, id, String(fd.get('reason') ?? ''))
           : { ok: false as const, message: 'Aksi tidak dikenal.' };

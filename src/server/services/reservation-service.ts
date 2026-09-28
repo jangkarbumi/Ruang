@@ -90,6 +90,7 @@ export async function createReservation(user: SessionUser, input: ReservationInp
     purpose: input.purpose.trim(),
     status: 'PENDING',
     cancellationReason: null,
+    rejectionReason: null,
     decidedById: null,
     createdAt: new Date(),
   };

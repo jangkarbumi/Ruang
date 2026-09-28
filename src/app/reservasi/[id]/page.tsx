@@ -94,7 +94,13 @@ export default async function ReservationDetailPage(props: PageProps<'/reservasi
           {reservation.status === 'REJECTED' && (
             <section className="rounded-2xl border border-red-200 bg-red-50 p-5">
               <h2 className="text-sm font-bold text-red-700">Pengajuan ditolak</h2>
-              <p className="mt-1 text-sm text-red-700">
+              {reservation.rejectionReason ? (
+                <>
+                  <p className="mt-1 text-sm font-semibold text-red-700">Alasan:</p>
+                  <p className="mt-0.5 text-sm text-red-700">{reservation.rejectionReason}</p>
+                </>
+              ) : null}
+              <p className="mt-2 text-sm text-red-700">
                 Anda dapat mengajukan ulang pada jadwal lain atau menghubungi petugas fasilitas.
               </p>
             </section>

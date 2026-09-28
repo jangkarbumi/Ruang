@@ -95,6 +95,12 @@ export default async function OfficerReservationDetailPage(props: PageProps<'/pe
             {decidedBy && r.status !== 'PENDING' && (
               <p className="mt-5 text-xs text-gray-500">Diproses oleh {decidedBy.name}</p>
             )}
+            {r.status === 'REJECTED' && r.rejectionReason && (
+              <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4">
+                <h3 className="text-sm font-bold text-red-700">Alasan penolakan</h3>
+                <p className="mt-1 text-sm text-red-700">{r.rejectionReason}</p>
+              </div>
+            )}
             {r.status === 'CANCELLED' && r.cancellationReason && (
               <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
                 <h3 className="text-sm font-bold text-amber-800">Alasan pembatalan</h3>

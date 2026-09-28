@@ -40,6 +40,8 @@ export default function SlotPicker({
   lastDate,
   slots,
   viewerRole,
+  initialStart = '',
+  initialEnd = '',
 }: {
   facilityId: number;
   date: string;
@@ -48,9 +50,17 @@ export default function SlotPicker({
   slots: Slot[];
   /** Role akun yang sedang login; null untuk pengunjung. */
   viewerRole: Role | null;
+  /** Slot yang dipilih sebelum login (`?mulai=&selesai=`), dipilih ulang setelah kembali. */
+  initialStart?: string;
+  initialEnd?: string;
 }) {
   const router = useRouter();
-  const [range, setRange] = useState<{ from: number; to: number } | null>(null);
+  const [range, setRange] = useState<{ from: number; to: number } | null>(() => {
+    const from = slots.findIndex((s) => s.start === initialStart);
+    const to = slots.findIndex((s) => s.end === initialEnd);
+    if (from < 0 || to < from || !slots.slice(from, to + 1).every((s) => s.state === 'tersedia')) return null;
+    return { from, to };
+  });
 
   const base = `/fasilitas/${facilityId}`;
   const prev = date > today ? addDays(date, -1) : null;
@@ -66,13 +76,15 @@ export default function SlotPicker({
   };
 
   const chosen = range && { start: slots[range.from].start, end: slots[range.to].end, count: range.to - range.from + 1 };
-  // Pengguna yang sudah login langsung ke form reservasi; pengunjung login dulu lalu kembali ke form yang sama
-  const nextUrl =
+  // Pengguna yang sudah login langsung ke form reservasi; pengunjung login dulu lalu kembali
+  // ke halaman detail ini dengan tanggal & slot yang sama masih terpilih
+  const formUrl =
     chosen && `/reservasi/baru?fasilitas=${facilityId}&tanggal=${date}&mulai=${chosen.start}&selesai=${chosen.end}`;
+  const returnUrl = chosen && `${base}?tanggal=${date}&mulai=${chosen.start}&selesai=${chosen.end}`;
   const available = slots.filter((s) => s.state === 'tersedia').length;
   const isUser = viewerRole === 'PENGGUNA';
   const isStaff = viewerRole === 'PETUGAS' || viewerRole === 'ADMIN';
-  const ctaLabel = isUser ? 'Ajukan reservasi' : isStaff ? 'Khusus akun pengguna' : 'Login untuk mengajukan';
+  const ctaLabel = isUser ? 'Ajukan Reservasi' : isStaff ? 'Khusus akun pengguna' : 'Login untuk Ajukan Reservasi';
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1.7fr_1fr]">
@@ -191,9 +203,9 @@ export default function SlotPicker({
             <p className="mt-1 text-sm text-[#001741]">Belum ada slot dipilih.</p>
           )}
 
-          {chosen && nextUrl && !isStaff ? (
+          {chosen && formUrl && returnUrl && !isStaff ? (
             <Link
-              href={isUser ? nextUrl : `/login?next=${encodeURIComponent(nextUrl)}`}
+              href={isUser ? formUrl : `/login?next=${encodeURIComponent(returnUrl)}`}
               className="mt-6 flex w-full justify-center bg-[#0064D2] text-white hover:bg-[#0056b3] px-6 py-3 rounded-2xl text-sm font-bold transition"
             >
               {ctaLabel}

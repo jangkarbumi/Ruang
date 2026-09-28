@@ -72,6 +72,7 @@ function seed(): Store {
     purpose: string,
     status: Reservation['status'],
     cancellationReason: string | null = null,
+    rejectionReason: string | null = null,
   ): Reservation => ({
     id: ++rid,
     userId,
@@ -81,6 +82,7 @@ function seed(): Store {
     purpose,
     status,
     cancellationReason,
+    rejectionReason,
     decidedById: status === 'PENDING' ? null : OFFICER_ID,
     createdAt: at(Math.min(day, 0) - 3, '10:15'),
   });

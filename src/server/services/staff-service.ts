@@ -1,4 +1,5 @@
 import { store } from '@/server/data/store';
+import { REJECTION_REASON_MIN } from '@/lib/reservation';
 import { getAvailability, getFacility } from '@/server/services/facility-service';
 import type { SessionUser } from '@/server/session';
 import type { Account } from '@/lib/account';
@@ -91,11 +92,19 @@ export async function approveReservation(officer: SessionUser, id: number): Prom
   return { ok: true };
 }
 
-export async function rejectReservation(officer: SessionUser, id: number): Promise<Result> {
+export const REJECT_REASON_MIN = REJECTION_REASON_MIN;
+
+/** FR-08: petugas menolak pengajuan. Alasan penolakan wajib diisi (minimal 10 karakter). */
+export async function rejectReservation(officer: SessionUser, id: number, reason: string): Promise<Result> {
   const r = await getReservation(id);
   if (!r) return { ok: false, message: 'Reservasi tidak ditemukan.' };
   if (r.status !== 'PENDING') return { ok: false, message: 'Hanya pengajuan berstatus Menunggu yang dapat ditolak.' };
+  const text = reason.trim();
+  if (text.length < REJECTION_REASON_MIN) {
+    return { ok: false, message: `Alasan penolakan wajib diisi, minimal ${REJECTION_REASON_MIN} karakter.` };
+  }
   r.status = 'REJECTED';
+  r.rejectionReason = text;
   r.decidedById = officer.id;
   return { ok: true };
 }

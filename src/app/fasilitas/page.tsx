@@ -4,14 +4,26 @@ import { SearchX } from 'lucide-react';
 import PageBanner from '@/components/facility/PageBanner';
 import FacilityCard from '@/components/facility/FacilityCard';
 import FacilityFilters from '@/components/facility/FacilityFilters';
+import FacilityNavbar from '@/components/facility/FacilityNavbar';
+import { getCurrentUser } from '@/server/session';
 import { listFacilities, listLocations } from '@/server/services/facility-service';
 import { CAPACITY_OPTIONS, isFacilityType } from '@/lib/facility';
 
 export const metadata: Metadata = { title: 'Daftar Fasilitas | Ruang' };
 
+/**
+ * Halaman publik — dapat diakses tanpa login (guest) maupun setelah login.
+ * Status login dibaca dari cookie sesi di sisi server sehingga tidak ada
+ * hardcode isLoggedIn = true dan tidak ada kedipan (flash) pada sisi klien.
+ */
+export const dynamic = 'force-dynamic';
+
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? '';
 
 export default async function FacilitiesPage(props: PageProps<'/fasilitas'>) {
+  // Null = guest; SessionUser = sudah login. Tidak ada redirect di sini.
+  const user = await getCurrentUser();
+
   const sp = await props.searchParams;
   const locations = await listLocations();
 
@@ -26,7 +38,8 @@ export default async function FacilitiesPage(props: PageProps<'/fasilitas'>) {
 
   return (
     <main className="flex-1 bg-[#f8f9fa]">
-      <PageBanner>
+      {/* FacilityNavbar menampilkan Login+Register untuk guest, atau nama+Logout untuk yang sudah login */}
+      <PageBanner navbar={<FacilityNavbar user={user} active="fasilitas" />}>
         <h1 className="text-[44px] font-bold tracking-tight">Daftar Fasilitas</h1>
         <p className="mt-2 max-w-xl text-white/70">
           Telusuri gedung, aula, ruangan, dan lapangan di Universitas Diponegoro. Jadwal ketersediaan dapat

@@ -6,7 +6,7 @@ import type { Role } from './account';
 
 /** Halaman awal setelah login, per role. */
 export const HOME_BY_ROLE: Record<Role, string> = {
-  PENGGUNA: '/reservasi',
+  PENGGUNA: '/fasilitas',
   PETUGAS: '/petugas',
   ADMIN: '/admin/akun',
 };
@@ -29,6 +29,9 @@ export function areaRole(pathname: string): Role | null {
 export function landingFor(role: Role, next?: string | null) {
   if (typeof next !== 'string' || !next.startsWith('/') || next.startsWith('//')) return HOME_BY_ROLE[role];
   const owner = areaRole(next);
-  const allowed = owner === role || (owner === null && inArea(next, '/fasilitas'));
+  // Halaman fasilitas (publik) selalu boleh; area terproteksi hanya jika role-nya cocok
+  const isFacilityPage = next === '/fasilitas' || inArea(next, '/fasilitas');
+  const isOwnArea = owner !== null && owner === role;
+  const allowed = isFacilityPage || isOwnArea;
   return allowed ? next : HOME_BY_ROLE[role];
 }

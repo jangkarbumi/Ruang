@@ -3,7 +3,7 @@ import PageBanner from '@/components/facility/PageBanner';
 import UserNavbar from '@/components/user/UserNavbar';
 import ReportForm from '@/components/user/ReportForm';
 import { requireUser } from '@/server/session';
-import { listFacilities } from '@/server/services/facility-service';
+import { listFacilities, listLocations } from '@/server/services/facility-service';
 
 export const metadata: Metadata = { title: 'Lapor Kerusakan | Ruang' };
 
@@ -11,7 +11,7 @@ export default async function NewReportPage(props: PageProps<'/laporan/baru'>) {
   const user = await requireUser('/laporan/baru');
   const sp = await props.searchParams;
   // Fasilitas dalam perbaikan tetap bisa dilaporkan (mis. kerusakan tambahan)
-  const facilities = await listFacilities();
+  const [facilities, locations] = await Promise.all([listFacilities(), listLocations()]);
   const fid = typeof sp.fasilitas === 'string' && facilities.some((f) => String(f.id) === sp.fasilitas) ? sp.fasilitas : '';
 
   return (
@@ -25,7 +25,11 @@ export default async function NewReportPage(props: PageProps<'/laporan/baru'>) {
       </PageBanner>
 
       <div className="relative z-20 w-full max-w-300 mx-auto px-4 -mt-10 pb-20">
-        <ReportForm facilities={facilities.map((f) => ({ id: f.id, name: f.name }))} initialFacilityId={fid} />
+        <ReportForm
+          facilities={facilities.map((f) => ({ id: f.id, name: f.name, location: f.location }))}
+          locations={locations.filter((l) => facilities.some((f) => f.location === l))}
+          initialFacilityId={fid}
+        />
       </div>
     </main>
   );

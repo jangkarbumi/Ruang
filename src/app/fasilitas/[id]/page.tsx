@@ -4,12 +4,22 @@ import { ArrowLeft, Wrench } from 'lucide-react';
 import PageBanner from '@/components/facility/PageBanner';
 import FacilityCard from '@/components/facility/FacilityCard';
 import FacilityImage from '@/components/facility/FacilityImage';
+import FacilityNavbar from '@/components/facility/FacilityNavbar';
 import PinIcon from '@/components/facility/PinIcon';
 import SlotPicker from '@/components/facility/SlotPicker';
 import { getAvailability, getFacility, listFacilities } from '@/server/services/facility-service';
 import { getCurrentUser } from '@/server/session';
 import { UNIVERSITY_LOCATION, locationLabel } from '@/lib/facility';
 import { BOOKING_WINDOW_DAYS, addDays, clampDate, nowInJakarta } from '@/lib/slots';
+
+/**
+ * Halaman publik — dapat diakses tanpa login (guest) maupun setelah login.
+ * Status login dibaca dari sesi di sisi server.
+ * Proteksi login HANYA pada aksi pengajuan reservasi (/reservasi/baru), bukan di sini.
+ */
+export const dynamic = 'force-dynamic';
+
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? '';
 
 async function load(idParam: string) {
   const id = Number(idParam);
@@ -23,6 +33,9 @@ export async function generateMetadata(props: PageProps<'/fasilitas/[id]'>) {
 }
 
 export default async function FacilityDetailPage(props: PageProps<'/fasilitas/[id]'>) {
+  // Null = guest; SessionUser = sudah login. Tidak ada redirect di sini.
+  const viewer = await getCurrentUser();
+
   const [{ id }, sp] = await Promise.all([props.params, props.searchParams]);
   const facility = await load(id);
   if (!facility) notFound();
@@ -30,10 +43,9 @@ export default async function FacilityDetailPage(props: PageProps<'/fasilitas/[i
   const now = nowInJakarta();
   const date = clampDate(Array.isArray(sp.tanggal) ? sp.tanggal[0] : sp.tanggal, now.date);
   const bookable = facility.status === 'AKTIF';
-  const [slots, sameLocation, viewer] = await Promise.all([
+  const [slots, sameLocation] = await Promise.all([
     bookable ? getAvailability(facility, date, now) : Promise.resolve([]),
     listFacilities({ location: facility.location }),
-    getCurrentUser(),
   ]);
   const related = sameLocation.filter((f) => f.id !== facility.id).slice(0, 3);
 
@@ -46,7 +58,8 @@ export default async function FacilityDetailPage(props: PageProps<'/fasilitas/[i
 
   return (
     <main className="flex-1 bg-[#f8f9fa]">
-      <PageBanner>
+      {/* FacilityNavbar menampilkan Login+Register untuk guest, atau nama+Logout untuk yang sudah login */}
+      <PageBanner navbar={<FacilityNavbar user={viewer} active="fasilitas" />}>
         <Link href="/fasilitas" className="flex w-fit items-center gap-1.5 text-sm font-semibold text-white/70 hover:text-white transition">
           <ArrowLeft className="w-4 h-4" aria-hidden /> Kembali ke daftar fasilitas
         </Link>
@@ -100,6 +113,8 @@ export default async function FacilityDetailPage(props: PageProps<'/fasilitas/[i
               lastDate={addDays(now.date, BOOKING_WINDOW_DAYS)}
               slots={slots}
               viewerRole={viewer?.role ?? null}
+              initialStart={one(sp.mulai)}
+              initialEnd={one(sp.selesai)}
             />
           ) : (
             <div role="status" className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-5 max-w-2xl">

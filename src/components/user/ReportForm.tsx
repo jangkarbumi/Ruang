@@ -5,11 +5,13 @@ import { ImagePlus, X } from 'lucide-react';
 import { createReportAction, type ReportFormState } from '@/server/actions/report-actions';
 import { DESCRIPTION_MAX, PHOTO_MAX_CHARS, PHOTO_TYPES, REPORT_CATEGORIES } from '@/lib/report';
 import { validateReport, type ReportInput } from '@/lib/validation';
+import { locationLabel } from '@/lib/facility';
 import { FormField, Notice, fieldClass } from './form';
 
 export interface ReportFacilityOption {
   id: number;
   name: string;
+  location: string;
 }
 
 /** Perkecil foto di browser: sisi terpanjang ≤ 1280 px, JPEG. Foto kamera HP jadi ± 200–400 KB. */
@@ -30,9 +32,12 @@ async function shrink(file: File): Promise<string> {
 
 export default function ReportForm({
   facilities,
+  locations,
   initialFacilityId,
 }: {
   facilities: ReportFacilityOption[];
+  /** Urutan unit untuk pilihan fakultas — universitas dulu, lalu fakultas. */
+  locations: string[];
   initialFacilityId: string;
 }) {
   const [state, formAction, pending] = useActionState<ReportFormState, FormData>(createReportAction, { errors: {} });
@@ -42,6 +47,11 @@ export default function ReportForm({
     description: '',
     photo: '',
   });
+  // Saringan fakultas/unit hanya di tampilan — yang dikirim ke server tetap id fasilitas
+  const [location, setLocation] = useState(
+    () => facilities.find((f) => String(f.id) === initialFacilityId)?.location ?? '',
+  );
+  const facilityOptions = facilities.filter((f) => f.location === location);
   const [clientErrors, setClientErrors] = useState<ReportFormState['errors'] | null>(null);
   const [processing, setProcessing] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -87,18 +97,41 @@ export default function ReportForm({
       <div className="bg-white rounded-3xl border border-gray-100 shadow-lg p-6 md:p-8 space-y-5">
         {state.message && !clientErrors && <Notice tone="error">{state.message}</Notice>}
 
+        <FormField id="location" label="Fakultas / unit">
+          <select
+            id="location"
+            value={location}
+            onChange={(e) => {
+              setLocation(e.target.value);
+              // Fasilitas yang sudah dipilih dari unit lain tidak berlaku lagi
+              if (!facilities.some((f) => String(f.id) === values.facilityId && f.location === e.target.value)) {
+                setField('facilityId', '');
+              }
+            }}
+            className={fieldClass()}
+          >
+            <option value="">Pilih fakultas / unit</option>
+            {locations.map((l) => (
+              <option key={l} value={l}>
+                {locationLabel(l)}
+              </option>
+            ))}
+          </select>
+        </FormField>
+
         <FormField id="facilityId" label="Fasilitas" error={errors.facilityId}>
           <select
             id="facilityId"
             name="facilityId"
             value={values.facilityId}
             onChange={(e) => setField('facilityId', e.target.value)}
+            disabled={!location}
             aria-invalid={!!errors.facilityId}
             aria-describedby={describe('facilityId')}
-            className={fieldClass(errors.facilityId)}
+            className={`${fieldClass(errors.facilityId)} disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed`}
           >
-            <option value="">Pilih fasilitas</option>
-            {facilities.map((f) => (
+            <option value="">{location ? 'Pilih fasilitas' : 'Pilih fakultas / unit dulu'}</option>
+            {facilityOptions.map((f) => (
               <option key={f.id} value={f.id}>
                 {f.name}
               </option>
