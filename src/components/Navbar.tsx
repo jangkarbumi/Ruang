@@ -12,10 +12,10 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Link href={'login'} className="bg-white text-[#0064D2] hover:bg-gray-100 px-6 py-2 rounded-2xl text-sm font-bold transition">
+          <Link href={'/login'} className="bg-white text-[#0064D2] hover:bg-gray-100 px-6 py-2 rounded-2xl text-sm font-bold transition">
             Login
           </Link>
-          <Link href={'register'} className="bg-[#0064D2] text-white hover:bg-[#0056b3] px-6 py-2 rounded-2xl text-sm font-bold transition">
+          <Link href={'/register'} className="bg-[#0064D2] text-white hover:bg-[#0056b3] px-6 py-2 rounded-2xl text-sm font-bold transition">
             Register
           </Link>
         </div>

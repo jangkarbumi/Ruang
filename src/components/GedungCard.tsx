@@ -1,14 +1,16 @@
 import Image from 'next/image';
+import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 
 export interface GedungCardProps {
+  id: number;
   name: string;
   description: string;
   imageUrl: string;
   location: string;
 }
 
-export default function GedungCard({ name, description, imageUrl, location }: GedungCardProps) {
+export default function GedungCard({ id, name, description, imageUrl, location }: GedungCardProps) {
   return (
     <div className="flex bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow duration-300 w-95 h-45 shrink-0 overflow-hidden">
 
@@ -35,10 +37,10 @@ export default function GedungCard({ name, description, imageUrl, location }: Ge
           {description}
         </p>
         
-        <button className="mt-auto text-xs text-[#0064D2] font-semibold flex items-center gap-1 hover:gap-1.5 transition-all w-fit group">
+        <Link href={`/fasilitas/${id}`} className="mt-auto text-xs text-[#0064D2] font-semibold flex items-center gap-1 hover:gap-1.5 transition-all w-fit group">
           Detail lengkap 
-          <ArrowRight />
-        </button>
+          <ArrowRight className="w-4 h-4" />
+        </Link>
       </div>
     </div>
   );

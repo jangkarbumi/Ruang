@@ -1,6 +1,9 @@
 'use client';
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+
+import { loginAction, registerAction } from '@/server/actions/auth-actions'
 
 import { Alert, BackIcon, Button, Field, MailIcon, LockIcon, UserIcon } from './ui'
 
@@ -50,6 +53,7 @@ function Divider() {
 /* ---------- Login ---------- */
 
 function LoginForm({ go }: { go: (v: View) => void }) {
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<Errors>({})
@@ -67,16 +71,23 @@ function LoginForm({ go }: { go: (v: View) => void }) {
     if (Object.keys(next).length) return
 
     setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
-      // Demo credential check
-      if (email === 'admin@campus.edu' && password === 'password123') {
-        setBanner({ kind: 'success', msg: 'Login successful' })
-        setTimeout(() => go('dashboard'), 900)
-      } else {
-        setBanner({ kind: 'error', msg: 'Email or password is incorrect' })
-      }
-    }, 850)
+    // Diperiksa di server; setelah berhasil, pindah ke ?next= atau halaman awal sesuai role
+    const nextPath = new URLSearchParams(window.location.search).get('next')
+    loginAction({ email, password, next: nextPath })
+      .then((res) => {
+        if (res.ok) {
+          setBanner({ kind: 'success', msg: 'Login successful' })
+          router.push(res.redirectTo)
+          return
+        }
+        setLoading(false)
+        if (res.errors) setErrors(res.errors)
+        setBanner({ kind: 'error', msg: res.message })
+      })
+      .catch(() => {
+        setLoading(false)
+        setBanner({ kind: 'error', msg: 'Something went wrong. Please try again' })
+      })
   }
 
   return (
@@ -170,15 +181,21 @@ function RegisterForm({ go }: { go: (v: View) => void }) {
     if (Object.keys(next).length) return
 
     setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
-      // Demo: this address is "taken"
-      if (email === 'taken@campus.edu') {
-        setBanner({ kind: 'error', msg: 'Email already registered' })
-      } else {
-        setBanner({ kind: 'success', msg: 'Registration successful' })
-      }
-    }, 850)
+    // Disimpan di server dengan status menunggu verifikasi admin (BR-10)
+    registerAction({ name, email, password })
+      .then((res) => {
+        setLoading(false)
+        if (res.ok) {
+          setBanner({ kind: 'success', msg: 'Registration submitted. You can log in after an admin verifies your account' })
+          return
+        }
+        if (res.errors) setErrors(res.errors)
+        setBanner({ kind: 'error', msg: res.message })
+      })
+      .catch(() => {
+        setLoading(false)
+        setBanner({ kind: 'error', msg: 'Something went wrong. Please try again' })
+      })
   }
 
   return (
