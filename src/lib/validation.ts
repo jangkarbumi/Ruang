@@ -14,6 +14,8 @@ import { BOOKING_WINDOW_DAYS, addDays, isValidRange, toMinutes } from './slots';
  * dan di server sebagai penentu akhir (NFR-03, BR-03). Jangan hanya mengandalkan sisi browser.
  */
 
+export const emailOk = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
 export type FieldErrors<K extends string> = Partial<Record<K, string>>;
 
 export interface ReservationInput {

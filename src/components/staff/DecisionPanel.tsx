@@ -4,6 +4,7 @@ import { useActionState, useState } from 'react';
 import { decideReservationAction, type StaffActionState } from '@/server/actions/staff-actions';
 import type { ReservationStatus } from '@/lib/reservation';
 import { Notice, fieldClass } from '@/components/user/form';
+import { ReasonForm } from './ReasonForm';
 
 const REASON_MIN = 10;
 
@@ -25,8 +26,6 @@ export default function DecisionPanel({
 }) {
   const [state, action, pending] = useActionState<StaffActionState, FormData>(decideReservationAction, {});
   const [mode, setMode] = useState<'idle' | 'reject' | 'cancel'>('idle');
-  const [reason, setReason] = useState('');
-  const [reasonError, setReasonError] = useState<string | null>(null);
 
   if (status !== 'PENDING' && status !== 'APPROVED') {
     return <p className="text-sm text-gray-500">Reservasi ini sudah selesai diproses. Tidak ada tindakan lanjutan.</p>;
@@ -47,51 +46,17 @@ export default function DecisionPanel({
           )}
 
           {mode === 'reject' ? (
-            <form
+            <ReasonForm
+              id={id}
               action={action}
-              onSubmit={(e) => {
-                if (reason.trim().length < REASON_MIN) {
-                  e.preventDefault();
-                  setReasonError(`Alasan wajib diisi, minimal ${REASON_MIN} karakter.`);
-                }
-              }}
-              noValidate
-              className="rounded-2xl border border-red-200 bg-red-50 p-4"
-            >
-              <input type="hidden" name="id" value={id} />
-              <input type="hidden" name="decision" value="reject" />
-              <label htmlFor="reject-reason" className="block text-sm font-bold text-red-700">
-                Alasan penolakan (wajib)
-              </label>
-              <p className="mt-0.5 text-xs text-red-700">Alasan ini akan terlihat oleh pemohon.</p>
-              <textarea
-                id="reject-reason"
-                name="reason"
-                rows={3}
-                value={reason}
-                onChange={(e) => {
-                  setReason(e.target.value);
-                  setReasonError(null);
-                }}
-                aria-invalid={!!reasonError}
-                aria-describedby={reasonError ? 'reject-reason-error' : undefined}
-                placeholder="Contoh: Jadwal gedung sudah dipenuhi kegiatan universitas pada tanggal tersebut."
-                className={`mt-2 ${fieldClass(reasonError ?? undefined)}`}
-              />
-              {reasonError && (
-                <p id="reject-reason-error" className="mt-1.5 text-xs font-semibold text-red-600">
-                  {reasonError}
-                </p>
-              )}
-              <div className="mt-3 flex gap-2">
-                <button type="submit" disabled={pending} className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-2xl text-sm font-bold hover:bg-red-700 transition disabled:opacity-60">
-                  {pending ? 'Memproses…' : 'Ya, tolak'}
-                </button>
-                <button type="button" onClick={() => { setMode('idle'); setReason(''); setReasonError(null); }} className="flex-1 px-4 py-2.5 bg-white border border-gray-200 text-[#001741] rounded-2xl text-sm font-semibold hover:bg-gray-50 transition">
-                  Kembali
-                </button>
-              </div>
-            </form>
+              decision="reject"
+              pending={pending}
+              minReasonLength={REASON_MIN}
+              label="Alasan penolakan (wajib)"
+              placeholder="Contoh: Jadwal gedung sudah dipenuhi kegiatan universitas pada tanggal tersebut."
+              submitText="Ya, tolak"
+              onCancel={() => setMode('idle')}
+            />
           ) : (
             <div className="flex flex-col gap-2">
               <form action={action}>
@@ -119,51 +84,17 @@ export default function DecisionPanel({
 
       {status === 'APPROVED' &&
         (mode === 'cancel' ? (
-          <form
+          <ReasonForm
+            id={id}
             action={action}
-            onSubmit={(e) => {
-              if (reason.trim().length < REASON_MIN) {
-                e.preventDefault();
-                setReasonError(`Alasan wajib diisi, minimal ${REASON_MIN} karakter.`);
-              }
-            }}
-            noValidate
-            className="rounded-2xl border border-red-200 bg-red-50 p-4"
-          >
-            <input type="hidden" name="id" value={id} />
-            <input type="hidden" name="decision" value="cancel" />
-            <label htmlFor="reason" className="block text-sm font-bold text-red-700">
-              Alasan pembatalan (wajib)
-            </label>
-            <p className="mt-0.5 text-xs text-red-700">Alasan ini akan terlihat oleh pemohon.</p>
-            <textarea
-              id="reason"
-              name="reason"
-              rows={3}
-              value={reason}
-              onChange={(e) => {
-                setReason(e.target.value);
-                setReasonError(null);
-              }}
-              aria-invalid={!!reasonError}
-              aria-describedby={reasonError ? 'reason-error' : undefined}
-              placeholder="Contoh: Gedung dipakai untuk agenda pimpinan universitas yang mendesak."
-              className={`mt-2 ${fieldClass(reasonError ?? undefined)}`}
-            />
-            {reasonError && (
-              <p id="reason-error" className="mt-1.5 text-xs font-semibold text-red-600">
-                {reasonError}
-              </p>
-            )}
-            <div className="mt-3 flex gap-2">
-              <button type="submit" disabled={pending} className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-2xl text-sm font-bold hover:bg-red-700 transition disabled:opacity-60">
-                {pending ? 'Memproses…' : 'Batalkan reservasi'}
-              </button>
-              <button type="button" onClick={() => setMode('idle')} className="flex-1 px-4 py-2.5 bg-white border border-gray-200 text-[#001741] rounded-2xl text-sm font-semibold hover:bg-gray-50 transition">
-                Kembali
-              </button>
-            </div>
-          </form>
+            decision="cancel"
+            pending={pending}
+            minReasonLength={REASON_MIN}
+            label="Alasan pembatalan (wajib)"
+            placeholder="Contoh: Gedung dipakai untuk agenda pimpinan universitas yang mendesak."
+            submitText="Batalkan reservasi"
+            onCancel={() => setMode('idle')}
+          />
         ) : (
           <>
             <p className="text-sm text-gray-500">Reservasi sudah disetujui. Batalkan hanya dalam kondisi mendesak.</p>

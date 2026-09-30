@@ -1,12 +1,12 @@
 'use client';
 
 import { AuthLayout } from '@/components/auth/AuthLayout';
-import LoginForm from '@/components/auth/LoginForm';
+import ForgotForm from '@/components/auth/ForgotForm';
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   return (
     <AuthLayout>
-      <LoginForm />
+      <ForgotForm />
     </AuthLayout>
   );
 }
