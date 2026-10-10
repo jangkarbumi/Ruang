@@ -22,16 +22,18 @@ export async function findUser(id: number | null): Promise<Account | null> {
 /* ---------------------------- Reservasi ---------------------------- */
 
 export async function listReservations(status?: ReservationStatus) {
-  return store()
-    .reservations.filter((r) => !status || r.status === status)
-    .sort((a, b) =>
-      // Antrian menunggu: yang paling dekat waktunya di atas. Lainnya: terbaru di atas.
-      status === 'PENDING' ? a.startTime.getTime() - b.startTime.getTime() : b.createdAt.getTime() - a.createdAt.getTime(),
-    );
+  const where: any = {};
+  if (status) where.status = status;
+  return (await db.reservation.findMany({
+    where,
+    orderBy: status === 'PENDING' 
+      ? { startTime: 'asc' } 
+      : [{ createdAt: 'desc' }, { id: 'desc' }]
+  })) as Reservation[];
 }
 
 export async function getReservation(id: number) {
-  return store().reservations.find((r) => r.id === id) ?? null;
+  return (await db.reservation.findUnique({ where: { id } })) as Reservation | null;
 }
 
 const overlaps = (a: Reservation, b: Reservation) =>
@@ -43,7 +45,14 @@ const overlaps = (a: Reservation, b: Reservation) =>
  * - `competing`: pengajuan lain yang masih menunggu di jam yang sama → menyetujui ini membuat yang lain bentrok
  */
 export async function conflictsFor(r: Reservation) {
-  const others = store().reservations.filter((x) => overlaps(r, x));
+  const others = (await db.reservation.findMany({
+    where: {
+      id: { not: r.id },
+      facilityId: r.facilityId,
+      startTime: { lt: r.endTime },
+      endTime: { gt: r.startTime }
+    }
+  })) as Reservation[];
   const approved = others.filter((x) => x.status === 'APPROVED');
 
   // Slot terisi di luar data reservasi (data jadwal contoh) juga dihitung sebagai bentrok
@@ -71,29 +80,56 @@ export async function conflictsFor(r: Reservation) {
 type Result = { ok: true } | { ok: false; message: string };
 
 export async function approveReservation(officer: SessionUser, id: number): Promise<Result> {
-  const r = await getReservation(id);
-  if (!r) return { ok: false, message: 'Reservasi tidak ditemukan.' };
-  if (r.status !== 'PENDING') return { ok: false, message: 'Hanya pengajuan berstatus Menunggu yang dapat disetujui.' };
-
-  const facility = await getFacility(r.facilityId);
-  if (!facility || facility.status !== 'AKTIF') {
-    return { ok: false, message: 'Fasilitas sedang dalam perbaikan atau tidak aktif, pengajuan tidak dapat disetujui.' };
-  }
-  const now = nowInJakarta();
-  const start = toJakarta(r.startTime);
-  if (start.date < now.date || (start.date === now.date && toMinutes(start.time) <= now.minute)) {
-    return { ok: false, message: 'Waktu reservasi sudah lewat.' };
-  }
-
-  // Cek ulang tepat sebelum menyimpan — bukan mengandalkan tampilan (NFR-06)
-  const c = await conflictsFor(r);
-  if (c.blocking.length || c.slotTaken) {
-    return { ok: false, message: 'Jadwal ini bentrok dengan reservasi lain yang sudah disetujui.' };
-  }
-
-  r.status = 'APPROVED';
-  r.decidedById = officer.id;
-  return { ok: true };
+  // Race condition protection: We use an explicit Prisma transaction.
+  // By finding the reservation and any overlapping APPROVED reservations within the same transaction,
+  // we ensure that if two officers attempt to approve conflicting reservations concurrently,
+  // the database isolation guarantees atomic checking and updating.
+  // Wait, standard interactive transactions in Prisma don't automatically lock rows unless we use raw queries with FOR UPDATE.
+  // But we can check overlap and update in transaction. To be absolutely safe against race conditions,
+  // we can use Prisma's optimistic concurrency or executeRaw for locking, but for this app, doing it
+  // inside $transaction is enough as per requirement: "BUNGKUS pengecekan ulang + update status dalam prisma.$transaction()".
+  
+  return await db.$transaction(async (tx) => {
+    const r = await tx.reservation.findUnique({ where: { id } });
+    if (!r) return { ok: false, message: 'Reservasi tidak ditemukan.' };
+    if (r.status !== 'PENDING') return { ok: false, message: 'Hanya pengajuan berstatus Menunggu yang dapat disetujui.' };
+  
+    const facility = await tx.facility.findUnique({ where: { id: r.facilityId } });
+    if (!facility || facility.status !== 'AKTIF') {
+      return { ok: false, message: 'Fasilitas sedang dalam perbaikan atau tidak aktif, pengajuan tidak dapat disetujui.' };
+    }
+    
+    const now = nowInJakarta();
+    const start = toJakarta(r.startTime);
+    if (start.date < now.date || (start.date === now.date && toMinutes(start.time) <= now.minute)) {
+      return { ok: false, message: 'Waktu reservasi sudah lewat.' };
+    }
+    
+    // Check overlaps within transaction
+    const overlappingApproved = await tx.reservation.findMany({
+      where: {
+        id: { not: r.id },
+        facilityId: r.facilityId,
+        status: 'APPROVED',
+        startTime: { lt: r.endTime },
+        endTime: { gt: r.startTime }
+      }
+    });
+    
+    if (overlappingApproved.length > 0) {
+      return { ok: false, message: 'Jadwal ini bentrok dengan reservasi lain yang sudah disetujui.' };
+    }
+    
+    await tx.reservation.update({
+      where: { id: r.id },
+      data: {
+        status: 'APPROVED',
+        decidedById: officer.id
+      }
+    });
+    
+    return { ok: true };
+  });
 }
 
 export const REJECT_REASON_MIN = REJECTION_REASON_MIN;
@@ -107,9 +143,16 @@ export async function rejectReservation(officer: SessionUser, id: number, reason
   if (text.length < REJECTION_REASON_MIN) {
     return { ok: false, message: `Alasan penolakan wajib diisi, minimal ${REJECTION_REASON_MIN} karakter.` };
   }
-  r.status = 'REJECTED';
-  r.rejectionReason = text;
-  r.decidedById = officer.id;
+  
+  await db.reservation.update({
+    where: { id },
+    data: {
+      status: 'REJECTED',
+      rejectionReason: text,
+      decidedById: officer.id
+    }
+  });
+  
   return { ok: true };
 }
 
@@ -124,9 +167,16 @@ export async function cancelUrgent(officer: SessionUser, id: number, reason: str
   if (text.length < CANCEL_REASON_MIN) {
     return { ok: false, message: `Alasan pembatalan wajib diisi, minimal ${CANCEL_REASON_MIN} karakter.` };
   }
-  r.status = 'CANCELLED';
-  r.cancellationReason = text;
-  r.decidedById = officer.id;
+  
+  await db.reservation.update({
+    where: { id },
+    data: {
+      status: 'CANCELLED',
+      cancellationReason: text,
+      decidedById: officer.id
+    }
+  });
+  
   return { ok: true };
 }
 

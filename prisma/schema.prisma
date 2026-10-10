@@ -92,6 +92,7 @@ model Reservation {
   purpose            String
   status             ReservationStatus @default(PENDING)
   cancellationReason String?
+  rejectionReason    String?
   decidedById        Int?
   decidedBy          User?             @relation("DecidedBy", fields: [decidedById], references: [id])
   createdAt          DateTime          @default(now())

@@ -1,5 +1,5 @@
 import { db } from "@/server/db";
-import { approvedIntervals, store } from "@/server/data/store";
+
 import { isFacilityType, type Facility, type FacilityStatus } from "@/lib/facility";
 import { validateFacility, type FacilityInput, type FieldErrors } from "@/lib/validation";
 import { slotTimes, toJakarta, toMinutes, type Slot } from "@/lib/slots";
@@ -107,9 +107,13 @@ export async function updateFacility(id: number, input: FacilityInput): Promise<
 }
 
 export async function upcomingReservationCount(id: number, now = new Date()) {
-  return store().reservations.filter(
-    (r) => r.facilityId === id && (r.status === "PENDING" || r.status === "APPROVED") && r.endTime > now,
-  ).length;
+  return await db.reservation.count({
+    where: {
+      facilityId: id,
+      status: { in: ['PENDING', 'APPROVED'] },
+      endTime: { gt: now }
+    }
+  });
 }
 
 export async function setFacilityActive(id: number, active: boolean) {
@@ -126,45 +130,38 @@ export async function setFacilityActive(id: number, active: boolean) {
 }
 
 export async function getAvailability(
-  facility: Facility,
+  f: Facility,
   date: string,
-  now: { date: string; minute: number },
+  now: { date: string; minute: number }
 ): Promise<Slot[]> {
-  const booked = dummyBookedStarts(facility.id, date);
-  const approved = approvedIntervals(facility.id, date);
+  const startOfDay = new Date(date + 'T00:00:00+07:00');
+  const endOfDay = new Date(date + 'T23:59:59+07:00');
+
+  const reservations = await db.reservation.findMany({
+    where: {
+      facilityId: f.id,
+      status: { in: ['PENDING', 'APPROVED'] },
+      startTime: { gte: startOfDay, lte: endOfDay }
+    }
+  });
+
+  const booked = new Set<string>();
+  for (const r of reservations) {
+    const s = toJakarta(r.startTime);
+    const from = toMinutes(s.time);
+    const to = toMinutes(toJakarta(r.endTime).time);
+    for (const t of slotTimes()) {
+      const m = toMinutes(t.start);
+      if (m >= from && m < to) booked.add(t.start);
+    }
+  }
+
   return slotTimes().map(({ start, end }) => {
-    const m = toMinutes(start);
-    const taken = booked.has(start) || approved.some((r) => m >= r.from && m < r.to);
-    let state: Slot["state"] = taken ? "terisi" : "tersedia";
-    if (date === now.date && toMinutes(start) <= now.minute) state = "lewat";
+    let state: Slot['state'] = booked.has(start) ? 'terisi' : 'tersedia';
+    if (f.status !== 'AKTIF') state = 'terisi';
+    if (date === now.date && toMinutes(start) <= now.minute) state = 'lewat';
     return { start, end, state };
   });
 }
 
-function dummyBookedStarts(facilityId: number, date: string) {
-  let seed = facilityId * 7919 + Number(date.replaceAll("-", ""));
-  const rand = () => {
-    seed = (seed * 1103515245 + 12345) % 2147483648;
-    return seed / 2147483648;
-  };
-  const times = slotTimes();
-  const out = new Set<string>();
-  const blocks = 1 + Math.floor(rand() * 3);
-  for (let b = 0; b < blocks; b++) {
-    const length = 2 + Math.floor(rand() * 5);
-    const first = Math.floor(rand() * (times.length - length));
-    for (let i = 0; i < length; i++) out.add(times[first + i].start);
-  }
-  for (const r of store().reservations) {
-    if (r.facilityId !== facilityId || (r.status !== "PENDING" && r.status !== "APPROVED")) continue;
-    const s = toJakarta(r.startTime);
-    if (s.date !== date) continue;
-    const from = toMinutes(s.time);
-    const to = toMinutes(toJakarta(r.endTime).time);
-    for (const t of times) {
-      const m = toMinutes(t.start);
-      if (m >= from && m < to) out.delete(t.start);
-    }
-  }
-  return out;
-}
+

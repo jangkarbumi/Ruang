@@ -1,4 +1,6 @@
 import { store } from '@/server/data/store';
+import { db } from '@/server/db';
+import type { Reservation } from '@/lib/reservation';
 import { findUser } from '@/server/services/staff-service';
 import { listAllFacilities } from '@/server/services/facility-service';
 import { locationLabel, type Facility } from '@/lib/facility';
@@ -37,10 +39,15 @@ async function facilityMap() {
   return new Map<number, Facility>((await listAllFacilities()).map((f) => [f.id, f]));
 }
 
-export async function reservationsIn(range: Range) {
-  return store()
-    .reservations.filter((r) => inRange(toJakarta(r.startTime).date, range))
-    .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+export async function reservationsIn(range: Range): Promise<Reservation[]> {
+  const fromDate = new Date(range.from + 'T00:00:00+07:00');
+  const toDate = new Date(range.to + 'T23:59:59+07:00');
+  return await db.reservation.findMany({
+    where: {
+      startTime: { gte: fromDate, lte: toDate }
+    },
+    orderBy: { startTime: 'asc' }
+  });
 }
 
 export async function reportsIn(range: Range) {

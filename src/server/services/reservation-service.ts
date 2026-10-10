@@ -1,3 +1,4 @@
+import { db } from '@/server/db';
 import { store } from '@/server/data/store';
 import { getAvailability, getFacility } from '@/server/services/facility-service';
 import type { SessionUser } from '@/server/session';
@@ -11,15 +12,18 @@ import { validateReservation, type FieldErrors, type ReservationInput } from '@/
  */
 
 export async function listUserReservations(user: SessionUser, status?: ReservationStatus) {
-  return store()
-    .reservations.filter((r) => r.userId === user.id && (!status || r.status === status))
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id - a.id);
+  const where: any = { userId: user.id };
+  if (status) where.status = status;
+  return (await db.reservation.findMany({
+    where,
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }]
+  })) as Reservation[];
 }
 
 /** `null` bila tidak ada ATAU milik orang lain — keduanya diperlakukan sama agar tidak membocorkan data. */
 export async function getUserReservation(user: SessionUser, id: number) {
-  const r = store().reservations.find((x) => x.id === id);
-  return r && r.userId === user.id ? r : null;
+  const r = await db.reservation.findUnique({ where: { id } });
+  return r && r.userId === user.id ? (r as Reservation) : null;
 }
 
 /** BR-06: hanya PENDING/APPROVED, dan paling lambat CANCEL_DEADLINE_HOURS sebelum mulai. */
@@ -68,33 +72,29 @@ export async function createReservation(user: SessionUser, input: ReservationInp
   const endTime = fromJakarta(input.date, input.end);
 
   // Cegah pengajuan ganda dari pengguna yang sama pada jadwal yang tumpang tindih
-  const duplicate = store().reservations.some(
-    (r) =>
-      r.userId === user.id &&
-      r.facilityId === facility.id &&
-      (r.status === 'PENDING' || r.status === 'APPROVED') &&
-      r.startTime < endTime &&
-      startTime < r.endTime,
-  );
-  if (duplicate) {
+  const duplicates = await db.reservation.findMany({
+    where: {
+      userId: user.id,
+      facilityId: facility.id,
+      status: { in: ['PENDING', 'APPROVED'] },
+      startTime: { lt: endTime },
+      endTime: { gt: startTime }
+    }
+  });
+  if (duplicates.length > 0) {
     return { ok: false, errors: { start: 'Anda sudah punya pengajuan di fasilitas ini pada jam yang tumpang tindih.' } };
   }
 
-  const s = store();
-  const reservation: Reservation = {
-    id: s.nextReservationId++,
-    userId: user.id,
-    facilityId: facility.id,
-    startTime,
-    endTime,
-    purpose: input.purpose.trim(),
-    status: 'PENDING',
-    cancellationReason: null,
-    rejectionReason: null,
-    decidedById: null,
-    createdAt: new Date(),
-  };
-  s.reservations.push(reservation);
+  const reservation = await db.reservation.create({
+    data: {
+      userId: user.id,
+      facilityId: facility.id,
+      startTime,
+      endTime,
+      purpose: input.purpose.trim(),
+      status: 'PENDING',
+    }
+  });
   return { ok: true, id: reservation.id };
 }
 
@@ -103,6 +103,11 @@ export async function cancelReservation(user: SessionUser, id: number) {
   if (!r) return { ok: false as const, message: 'Reservasi tidak ditemukan.' };
   const policy = cancelPolicy(r);
   if (!policy.allowed) return { ok: false as const, message: policy.reason ?? 'Reservasi ini tidak dapat dibatalkan.' };
-  r.status = 'CANCELLED';
+  
+  await db.reservation.update({
+    where: { id },
+    data: { status: 'CANCELLED' }
+  });
+  
   return { ok: true as const };
 }
