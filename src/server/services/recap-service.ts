@@ -1,4 +1,3 @@
-import { store } from '@/server/data/store';
 import { db } from '@/server/db';
 import type { Reservation } from '@/lib/reservation';
 import { findUser } from '@/server/services/staff-service';
@@ -51,9 +50,14 @@ export async function reservationsIn(range: Range): Promise<Reservation[]> {
 }
 
 export async function reportsIn(range: Range) {
-  return store()
-    .reports.filter((r) => inRange(toJakarta(r.createdAt).date, range))
-    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const fromDate = new Date(range.from + 'T00:00:00+07:00');
+  const toDate = new Date(range.to + 'T23:59:59+07:00');
+  return await db.report.findMany({
+    where: {
+      createdAt: { gte: fromDate, lte: toDate }
+    },
+    orderBy: { createdAt: 'asc' }
+  });
 }
 
 const hoursOf = (r: { startTime: Date; endTime: Date }) => (r.endTime.getTime() - r.startTime.getTime()) / 3_600_000;

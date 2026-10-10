@@ -1,10 +1,9 @@
-import { store } from '@/server/data/store';
 import { REJECTION_REASON_MIN } from '@/lib/reservation';
 import { getAvailability, getFacility } from '@/server/services/facility-service';
 import type { SessionUser } from '@/server/session';
 import type { Account, Role } from '@/lib/account';
 import type { Reservation, ReservationStatus } from '@/lib/reservation';
-import type { ReportStatus } from '@/lib/report';
+import type { ReportStatus, Report } from '@/lib/report';
 import { nowInJakarta, toJakarta, toMinutes } from '@/lib/slots';
 
 /**
@@ -169,13 +168,16 @@ export async function cancelUrgent(officer: SessionUser, id: number, reason: str
 /* ----------------------------- Laporan ----------------------------- */
 
 export async function listReports(status?: ReportStatus) {
-  return store()
-    .reports.filter((r) => !status || r.status === status)
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const where: any = {};
+  if (status) where.status = status;
+  return (await db.report.findMany({
+    where,
+    orderBy: { createdAt: 'desc' }
+  })) as Report[];
 }
 
 export async function getReport(id: number) {
-  return store().reports.find((r) => r.id === id) ?? null;
+  return (await db.report.findUnique({ where: { id } })) as Report | null;
 }
 
 /** Alur status (AC-06): Baru → Diproses → Selesai/Ditolak. Baru boleh langsung Ditolak. Laporan tertutup tidak dibuka lagi. */
@@ -206,8 +208,13 @@ export async function updateReport(
   if (closing && text.length < NOTE_MIN) {
     return { ok: false, errors: { note: `Catatan resolusi wajib diisi saat laporan ditutup (minimal ${NOTE_MIN} karakter).` } };
   }
-  r.status = next;
-  r.handledById = officer.id;
-  if (text) r.resolutionNote = text;
+  await db.report.update({
+    where: { id },
+    data: {
+      status: next,
+      handledById: officer.id,
+      resolutionNote: text || null
+    }
+  });
   return { ok: true };
 }
