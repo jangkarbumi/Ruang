@@ -1,13 +1,18 @@
-import { FACILITIES, LOCATIONS } from "@/server/data/facilities";
+import { db } from "@/server/db";
 import { approvedIntervals, store } from "@/server/data/store";
 import { isFacilityType, type Facility, type FacilityStatus } from "@/lib/facility";
 import { validateFacility, type FacilityInput, type FieldErrors } from "@/lib/validation";
 import { slotTimes, toJakarta, toMinutes, type Slot } from "@/lib/slots";
 
-/**
- * Logika baca fasilitas untuk halaman publik.
- * Saat database siap, ganti isi fungsi dengan query Prisma — tanda tangan fungsinya tetap.
- */
+const UNIV = "Universitas";
+const FIB = "Fakultas Ilmu Budaya";
+const FT = "Fakultas Teknik";
+const FISIP = "Fakultas Ilmu Sosial dan Ilmu Politik";
+const FH = "Fakultas Hukum";
+const FSM = "Fakultas Sains dan Matematika";
+const FPIK = "Fakultas Perikanan dan Ilmu Kelautan";
+
+export const LOCATIONS = [UNIV, FIB, FT, FISIP, FH, FSM, FPIK];
 
 export interface FacilityFilter {
   q?: string;
@@ -16,38 +21,36 @@ export interface FacilityFilter {
   minCapacity?: number;
 }
 
-/** Data fasilitas + perubahan admin (FR-16) + status terbaru yang diubah petugas/admin (FR-12, FR-16). */
-function all(): Facility[] {
-  const { facilityEdits, facilityStatus } = store();
-  return FACILITIES.map((f) => ({ ...f, ...facilityEdits[f.id], status: facilityStatus[f.id] ?? f.status }));
-}
-
-/** Fasilitas NONAKTIF tidak pernah terlihat oleh pengunjung. */
 function visible(f: Facility) {
   return f.status !== "NONAKTIF";
 }
 
 export async function listFacilities(filter: FacilityFilter = {}): Promise<Facility[]> {
   const q = filter.q?.trim().toLowerCase();
-  return all().filter(visible).filter((f) => {
-    if (q && !f.name.toLowerCase().includes(q)) return false;
-    if (isFacilityType(filter.type) && f.type !== filter.type) return false;
-    if (filter.location && f.location !== filter.location) return false;
-    if (filter.minCapacity && f.capacity < filter.minCapacity) return false;
-    return true;
-  });
+  
+  const where: any = { status: { not: "NONAKTIF" } };
+  if (filter.type && isFacilityType(filter.type)) where.type = filter.type;
+  if (filter.location) where.location = filter.location;
+  if (filter.minCapacity) where.capacity = { gte: filter.minCapacity };
+
+  let facilities = (await db.facility.findMany({ where, orderBy: { id: 'asc' } })) as Facility[];
+  
+  if (q) {
+    facilities = facilities.filter((f) => f.name.toLowerCase().includes(q));
+  }
+  
+  return facilities;
 }
 
 export async function getFacility(id: number): Promise<Facility | null> {
-  const f = all().find((x) => x.id === id);
+  const f = await db.facility.findUnique({ where: { id } }) as Facility | null;
   return f && visible(f) ? f : null;
 }
 
-/** FR-12: petugas menandai fasilitas dalam perbaikan / mengembalikannya ke aktif. */
 export async function setFacilityStatus(id: number, status: Extract<FacilityStatus, "AKTIF" | "PERBAIKAN">) {
   const f = await getFacility(id);
   if (!f) return false;
-  store().facilityStatus[id] = status;
+  await db.facility.update({ where: { id }, data: { status } });
   return true;
 }
 
@@ -59,17 +62,12 @@ export async function listLocations(): Promise<string[]> {
 /* Admin — FR-16                                                        */
 /* ------------------------------------------------------------------ */
 
-/** Semua fasilitas termasuk yang nonaktif — hanya untuk admin. */
 export async function listAllFacilities(): Promise<Facility[]> {
-  return all();
+  return (await db.facility.findMany({ orderBy: { id: 'asc' } })) as Facility[];
 }
 
-/**
- * Fasilitas berdasarkan id tanpa memandang status. Dipakai untuk menampilkan riwayat
- * reservasi & laporan, agar fasilitas yang sudah dinonaktifkan tetap terbaca namanya.
- */
 export async function findFacility(id: number): Promise<Facility | null> {
-  return all().find((x) => x.id === id) ?? null;
+  return (await db.facility.findUnique({ where: { id } })) as Facility | null;
 }
 
 export type UpdateFacilityResult =
@@ -84,48 +82,49 @@ export async function updateFacility(id: number, input: FacilityInput): Promise<
   if (Object.keys(errors).length) return { ok: false, errors };
 
   const name = input.name.trim().replace(/\s+/g, " ");
-  // Nama dipakai orang untuk mencari fasilitas — jangan sampai ada dua yang sama persis
-  if (all().some((f) => f.id !== id && f.name.toLowerCase() === name.toLowerCase())) {
+  
+  const existing = await db.facility.findFirst({
+    where: {
+      id: { not: id },
+      name: { equals: name, mode: 'insensitive' }
+    }
+  });
+  if (existing) {
     return { ok: false, errors: { name: "Nama ini sudah dipakai fasilitas lain." } };
   }
 
-  store().facilityEdits[id] = {
-    name,
-    type: input.type as Facility["type"],
-    location: input.location,
-    capacity: Number(input.capacity),
-    description: input.description.trim() || null,
-  };
-  return { ok: true, facility: (await findFacility(id))! };
+  const updated = await db.facility.update({
+    where: { id },
+    data: {
+      name,
+      type: input.type as Facility["type"],
+      location: input.location,
+      capacity: Number(input.capacity),
+      description: input.description.trim() || null,
+    }
+  });
+  return { ok: true, facility: updated as Facility };
 }
 
-/** Reservasi yang masih berjalan (menunggu/disetujui dan belum lewat) pada sebuah fasilitas. */
 export async function upcomingReservationCount(id: number, now = new Date()) {
   return store().reservations.filter(
     (r) => r.facilityId === id && (r.status === "PENDING" || r.status === "APPROVED") && r.endTime > now,
   ).length;
 }
 
-/**
- * FR-16: nonaktifkan / aktifkan kembali. Fasilitas nonaktif hilang dari katalog publik,
- * tidak bisa direservasi atau dilaporkan, dan pengajuan yang menunggu tidak bisa disetujui.
- * Data reservasi lamanya tetap disimpan untuk riwayat & rekap.
- */
 export async function setFacilityActive(id: number, active: boolean) {
   const f = await findFacility(id);
   if (!f) return false;
   if (active && f.status !== "NONAKTIF") return false;
   if (!active && f.status === "NONAKTIF") return false;
-  store().facilityStatus[id] = active ? "AKTIF" : "NONAKTIF";
+  
+  await db.facility.update({
+    where: { id },
+    data: { status: active ? "AKTIF" : "NONAKTIF" }
+  });
   return true;
 }
 
-/**
- * Ketersediaan per slot untuk satu tanggal.
- * Hanya mengembalikan status — tanpa pemohon atau tujuan (BR-05, AC-01).
- *
- * `now` = tanggal & menit WIB saat ini; slot yang sudah lewat hari ini ditandai "lewat".
- */
 export async function getAvailability(
   facility: Facility,
   date: string,
@@ -142,11 +141,6 @@ export async function getAvailability(
   });
 }
 
-/* ------------------------------------------------------------------ */
-/* SEMENTARA: jadwal terisi buatan, stabil per fasilitas + tanggal.     */
-/* Ganti dengan query Reservation berstatus APPROVED/PENDING.          */
-/* ------------------------------------------------------------------ */
-
 function dummyBookedStarts(facilityId: number, date: string) {
   let seed = facilityId * 7919 + Number(date.replaceAll("-", ""));
   const rand = () => {
@@ -155,14 +149,12 @@ function dummyBookedStarts(facilityId: number, date: string) {
   };
   const times = slotTimes();
   const out = new Set<string>();
-  const blocks = 1 + Math.floor(rand() * 3); // 1–3 reservasi per hari
+  const blocks = 1 + Math.floor(rand() * 3);
   for (let b = 0; b < blocks; b++) {
-    const length = 2 + Math.floor(rand() * 5); // 1–3 jam
+    const length = 2 + Math.floor(rand() * 5);
     const first = Math.floor(rand() * (times.length - length));
     for (let i = 0; i < length; i++) out.add(times[first + i].start);
   }
-  // Jangan menimpa jam yang sudah dipakai reservasi di penyimpanan (menunggu/disetujui),
-  // agar data contoh tidak bentrok secara acak dan tidak terjadi dobel pesan.
   for (const r of store().reservations) {
     if (r.facilityId !== facilityId || (r.status !== "PENDING" && r.status !== "APPROVED")) continue;
     const s = toJakarta(r.startTime);

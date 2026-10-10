@@ -18,9 +18,7 @@ interface Store {
   reservations: Reservation[];
   reports: Report[];
   /** Status fasilitas yang diubah petugas (FR-12), menimpa nilai di data fasilitas. */
-  facilityStatus: Record<number, FacilityStatus>;
   /** Perubahan data fasilitas oleh admin (FR-16), menimpa nilai di data fasilitas. */
-  facilityEdits: Record<number, FacilityEdit>;
   nextUserId: number;
   nextReservationId: number;
   nextReportId: number;
@@ -34,7 +32,6 @@ export type FacilityEdit = Partial<Pick<Facility, 'name' | 'type' | 'location' |
 export function store(): Store {
   const s = (g.__ruangStoreV3 ??= seed());
   // Store yang sudah ada di memori sebelum FR-16 dibuat belum punya kolom ini
-  s.facilityEdits ??= {};
   return s;
 }
 
@@ -193,8 +190,6 @@ function seed(): Store {
     reports,
     // Semua akun contoh memakai password "password123"
     passwords: Object.fromEntries(users.map((u) => [u.id, hashPassword('password123')])),
-    facilityStatus: {},
-    facilityEdits: {},
     nextUserId: 600,
     nextReservationId: rid + 1,
     nextReportId: pid + 1,

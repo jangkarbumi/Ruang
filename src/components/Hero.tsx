@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import GedungCard from './GedungCard';
 import { ArrowRight } from 'lucide-react';
-import { FACILITIES } from '@/server/data/facilities';
+import { listFacilities } from '@/server/services/facility-service';
 
-export default function Hero() {
-  const highlightGedung = FACILITIES.filter(f => f.imageUrl).slice(0, 2);
+export default async function Hero() {
+  const facilities = await listFacilities();
+  const highlightGedung = facilities.filter(f => f.imageUrl).slice(0, 2);
 
   return (
     <main
