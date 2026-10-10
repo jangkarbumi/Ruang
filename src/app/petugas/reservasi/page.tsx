@@ -25,7 +25,7 @@ export default async function OfficerReservationsPage(props: PageProps<'/petugas
       return {
         r,
         facility: await findFacility(r.facilityId),
-        requester: findUser(r.userId)?.name,
+        requester: (await findUser(r.userId))?.name,
         conflict: !!c && (c.blocking.length > 0 || c.slotTaken),
       };
     }),

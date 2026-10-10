@@ -3,7 +3,7 @@
 import { useActionState, useState } from 'react';
 import { decideReservationAction, type StaffActionState } from '@/server/actions/staff-actions';
 import type { ReservationStatus } from '@/lib/reservation';
-import { Notice, fieldClass } from '@/components/user/form';
+import { Notice } from '@/components/user/form';
 import { ReasonForm } from './ReasonForm';
 
 const REASON_MIN = 10;
