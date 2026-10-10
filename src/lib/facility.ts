@@ -13,7 +13,7 @@ export interface Facility {
   capacity: number;
   description: string | null;
   status: FacilityStatus;
-  imageUrl?: string;
+  imageUrl?: string | null;
 }
 
 export const FACILITY_STATUS: Record<FacilityStatus, { label: string; className: string }> = {

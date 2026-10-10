@@ -1,4 +1,4 @@
-import { store } from '@/server/data/store';
+import { db } from '@/server/db';
 import { hashPassword } from '@/server/auth/password';
 import { PASSWORD_MIN, type Account, type AccountStatus, type Role } from '@/lib/account';
 
@@ -8,16 +8,26 @@ import { PASSWORD_MIN, type Account, type AccountStatus, type Role } from '@/lib
  */
 
 export async function listAccounts(filter: { role?: Role; status?: AccountStatus } = {}) {
-  return store()
-    .users.filter((u) => (!filter.role || u.role === filter.role) && (!filter.status || u.accountStatus === filter.status))
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const users = await db.user.findMany({
+    where: {
+      ...(filter.role && { role: filter.role }),
+      ...(filter.status && { accountStatus: filter.status }),
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  return users.map(u => ({ ...u, role: u.role as Role, accountStatus: u.accountStatus as AccountStatus }));
 }
 
 export async function setAccountStatus(id: number, status: Extract<AccountStatus, 'ACTIVE' | 'REJECTED'>) {
-  const u = store().users.find((x) => x.id === id);
+  const u = await db.user.findUnique({ where: { id } });
   if (!u) return { ok: false as const, message: 'Akun tidak ditemukan.' };
   if (u.accountStatus !== 'PENDING') return { ok: false as const, message: 'Akun ini sudah diverifikasi sebelumnya.' };
-  u.accountStatus = status;
+  
+  await db.user.update({
+    where: { id },
+    data: { accountStatus: status }
+  });
+  
   return { ok: true as const };
 }
 
@@ -45,20 +55,24 @@ export async function createAccount(v: NewAccountInput): Promise<{ ok: true; acc
   if (Object.keys(errors).length) return { ok: false, errors };
 
   const email = v.email.trim().toLowerCase();
-  const s = store();
-  if (s.users.some((u) => u.email.toLowerCase() === email)) {
+  
+  const existing = await db.user.findUnique({ where: { email } });
+  if (existing) {
     return { ok: false, errors: { email: 'Email ini sudah terdaftar.' } };
   }
 
-  const account: Account = {
-    id: s.nextUserId++,
-    name: v.name.trim(),
-    email,
-    role: v.role as Role,
-    accountStatus: 'ACTIVE', // akun buatan admin langsung aktif
-    createdAt: new Date(),
+  const account = await db.user.create({
+    data: {
+      name: v.name.trim(),
+      email,
+      role: v.role as Role,
+      accountStatus: 'ACTIVE', // akun buatan admin langsung aktif
+      password: hashPassword(v.password),
+    }
+  });
+  
+  return { 
+    ok: true, 
+    account: { ...account, role: account.role as Role, accountStatus: account.accountStatus as AccountStatus } 
   };
-  s.users.push(account);
-  s.passwords[account.id] = hashPassword(v.password);
-  return { ok: true, account };
 }
