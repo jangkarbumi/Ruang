@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ChevronRight, Users } from 'lucide-react';
+import { ChevronRight, Plus, Users } from 'lucide-react';
 import PageBanner from '@/components/facility/PageBanner';
 import FacilityImage from '@/components/facility/FacilityImage';
 import PinIcon from '@/components/facility/PinIcon';
@@ -32,10 +32,20 @@ export default async function AdminFacilitiesPage(props: PageProps<'/admin/fasil
   return (
     <main className="flex-1 bg-[#f8f9fa]">
       <PageBanner navbar={<AdminNavbar user={user} active="fasilitas" />}>
-        <h1 className="text-[44px] font-bold tracking-tight">Kelola Fasilitas</h1>
-        <p className="mt-2 max-w-xl text-white/70">
-          Ubah data fasilitas, atau nonaktifkan fasilitas yang tidak lagi dapat dipinjam.
-        </p>
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div>
+            <h1 className="text-[44px] font-bold tracking-tight">Kelola Fasilitas</h1>
+            <p className="mt-2 max-w-xl text-white/70">
+              Tambah dan ubah data fasilitas, atau nonaktifkan fasilitas yang tidak lagi dapat dipinjam.
+            </p>
+          </div>
+          <Link
+            href="/admin/fasilitas/baru"
+            className="flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-[#0064D2] hover:bg-white/90 shadow-sm transition shrink-0"
+          >
+            <Plus className="w-4 h-4" aria-hidden /> Tambah Fasilitas
+          </Link>
+        </div>
       </PageBanner>
 
       <div className="relative z-20 w-full max-w-300 mx-auto px-4 -mt-7 pb-20">

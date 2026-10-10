@@ -16,6 +16,7 @@ import { FACILITY_STATUS, locationLabel } from '@/lib/facility';
 export const metadata: Metadata = { title: 'Ubah Fasilitas | Admin | Ruang' };
 
 const FLASH = {
+  dibuat: { tone: 'success', text: 'Fasilitas baru berhasil ditambahkan dan langsung aktif di katalog.' },
   disimpan: { tone: 'success', text: 'Perubahan disimpan dan langsung tampil di katalog fasilitas.' },
   nonaktif: { tone: 'info', text: 'Fasilitas dinonaktifkan. Fasilitas tidak lagi tampil di katalog dan tidak dapat direservasi.' },
   aktif: { tone: 'success', text: 'Fasilitas diaktifkan kembali dan dapat direservasi.' },
@@ -58,7 +59,7 @@ export default async function AdminFacilityEditPage(props: PageProps<'/admin/fas
         <div className="grid gap-6 lg:grid-cols-[1.7fr_1fr]">
           {/* key: form kembali ke nilai tersimpan setelah berhasil disimpan */}
           <FacilityForm
-            key={`${facility.name}|${facility.type}|${facility.location}|${facility.capacity}|${facility.description}`}
+            key={`${facility.name}|${facility.type}|${facility.location}|${facility.capacity}|${facility.description}|${facility.imageUrl}`}
             facility={facility}
             locations={locations}
           />

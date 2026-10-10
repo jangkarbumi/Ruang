@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireRole } from '@/server/session';
 import { createAccount, setAccountStatus, type NewAccountErrors } from '@/server/services/account-service';
-import { setFacilityActive, updateFacility } from '@/server/services/facility-service';
+import { createFacility, setFacilityActive, updateFacility } from '@/server/services/facility-service';
 import { ROLE_LABEL } from '@/lib/account';
 import type { FacilityInput, FieldErrors } from '@/lib/validation';
 
@@ -42,6 +42,26 @@ export async function verifyAccountAction(fd: FormData) {
 /* FR-16: kelola fasilitas                                              */
 /* ------------------------------------------------------------------ */
 
+export interface CreateFacilityState {
+  errors: FieldErrors<keyof FacilityInput>;
+  message?: string;
+}
+
+export async function createFacilityAction(_prev: CreateFacilityState, fd: FormData): Promise<CreateFacilityState> {
+  await requireRole('ADMIN');
+  const result = await createFacility({
+    name: str(fd, 'name'),
+    type: str(fd, 'type'),
+    location: str(fd, 'location'),
+    capacity: str(fd, 'capacity'),
+    description: str(fd, 'description'),
+    imageUrl: str(fd, 'imageUrl'),
+  });
+  if (!result.ok) return { errors: result.errors, message: result.message ?? 'Periksa kembali isian yang ditandai.' };
+  revalidatePath('/', 'layout');
+  redirect(`/admin/fasilitas/${result.facility.id}?hasil=dibuat`);
+}
+
 export interface UpdateFacilityState {
   errors: FieldErrors<keyof FacilityInput>;
   message?: string;
@@ -56,6 +76,7 @@ export async function updateFacilityAction(_prev: UpdateFacilityState, fd: FormD
     location: str(fd, 'location'),
     capacity: str(fd, 'capacity'),
     description: str(fd, 'description'),
+    imageUrl: str(fd, 'imageUrl'),
   });
   if (!result.ok) return { errors: result.errors, message: result.message ?? 'Periksa kembali isian yang ditandai.' };
   // Nama, kapasitas, dll. tampil di katalog publik, halaman pengguna, dan petugas

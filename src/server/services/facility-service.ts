@@ -73,6 +73,40 @@ export async function findFacility(id: number): Promise<Facility | null> {
   return { ...f, type: f.type as Facility["type"], status: f.status as FacilityStatus };
 }
 
+export type CreateFacilityResult =
+  | { ok: true; facility: Facility }
+  | { ok: false; errors: FieldErrors<keyof FacilityInput>; message?: string };
+
+export async function createFacility(input: FacilityInput): Promise<CreateFacilityResult> {
+  const errors = validateFacility(input, LOCATIONS);
+  if (Object.keys(errors).length) return { ok: false, errors };
+
+  const name = input.name.trim().replace(/\s+/g, ' ');
+
+  const existing = await db.facility.findFirst({
+    where: {
+      name: { equals: name, mode: 'insensitive' },
+    },
+  });
+  if (existing) {
+    return { ok: false, errors: { name: 'Nama fasilitas ini sudah dipakai fasilitas lain.' } };
+  }
+
+  const created = await db.facility.create({
+    data: {
+      name,
+      type: input.type as Facility['type'],
+      location: input.location,
+      capacity: Number(input.capacity),
+      description: input.description.trim() || null,
+      imageUrl: input.imageUrl?.trim() || null,
+      status: 'AKTIF',
+    },
+  });
+
+  return { ok: true, facility: created as Facility };
+}
+
 export type UpdateFacilityResult =
   | { ok: true; facility: Facility }
   | { ok: false; errors: FieldErrors<keyof FacilityInput>; message?: string };
@@ -104,6 +138,7 @@ export async function updateFacility(id: number, input: FacilityInput): Promise<
       location: input.location,
       capacity: Number(input.capacity),
       description: input.description.trim() || null,
+      imageUrl: input.imageUrl !== undefined ? (input.imageUrl.trim() || null) : current.imageUrl,
     }
   });
   return { ok: true, facility: updated as Facility };

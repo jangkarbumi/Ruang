@@ -82,6 +82,7 @@ export interface FacilityInput {
   location: string;
   capacity: string;
   description: string;
+  imageUrl?: string;
 }
 
 /** FR-16: ubah data fasilitas. `locations` = daftar unit yang sah. */
@@ -101,5 +102,13 @@ export function validateFacility(v: FacilityInput, locations: readonly string[])
 
   if (v.description.trim().length > FACILITY_DESCRIPTION_MAX)
     e.description = `Deskripsi maksimal ${FACILITY_DESCRIPTION_MAX} karakter.`;
+
+  if (v.imageUrl?.trim()) {
+    const img = v.imageUrl.trim();
+    if (!img.startsWith('/') && !/^https?:\/\//i.test(img)) {
+      e.imageUrl = 'URL gambar harus diawali dengan "/" (contoh: /gedung.jpg) atau "http(s)://".';
+    }
+  }
+
   return e;
 }
