@@ -2,18 +2,20 @@ import { db } from '@/server/db';
 import { hashPassword } from '@/server/auth/password';
 import { PASSWORD_MIN, type Account, type AccountStatus, type Role } from '@/lib/account';
 
+/**
+ * Kelola akun oleh admin (FR-13, FR-14, FR-15).
+ * Petugas hanya bisa dibuat oleh admin — tidak ada jalur registrasi mandiri untuk petugas (BR-09, AC-08).
+ */
+
 export async function listAccounts(filter: { role?: Role; status?: AccountStatus } = {}) {
-  const where: any = {};
-  if (filter.role) where.role = filter.role;
-  if (filter.status) where.accountStatus = filter.status;
-  
   const users = await db.user.findMany({
-    where,
+    where: {
+      ...(filter.role && { role: filter.role }),
+      ...(filter.status && { accountStatus: filter.status }),
+    },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, name: true, email: true, role: true, accountStatus: true, createdAt: true }
   });
-  
-  return users as Account[];
+  return users.map(u => ({ ...u, role: u.role as Role, accountStatus: u.accountStatus as AccountStatus }));
 }
 
 export async function setAccountStatus(id: number, status: Extract<AccountStatus, 'ACTIVE' | 'REJECTED'>) {
@@ -25,6 +27,7 @@ export async function setAccountStatus(id: number, status: Extract<AccountStatus
     where: { id },
     data: { accountStatus: status }
   });
+  
   return { ok: true as const };
 }
 
@@ -41,6 +44,7 @@ export function validateNewAccount(v: NewAccountInput): NewAccountErrors {
   const e: NewAccountErrors = {};
   if (v.name.trim().length < 3) e.name = 'Nama minimal 3 karakter.';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email.trim())) e.email = 'Masukkan alamat email yang valid.';
+  // Admin hanya mendaftarkan petugas atau pengguna — bukan admin lain
   if (v.role !== 'PETUGAS' && v.role !== 'PENGGUNA') e.role = 'Pilih jenis akun.';
   if (v.password.length < PASSWORD_MIN) e.password = `Password minimal ${PASSWORD_MIN} karakter.`;
   return e;
@@ -62,11 +66,13 @@ export async function createAccount(v: NewAccountInput): Promise<{ ok: true; acc
       name: v.name.trim(),
       email,
       role: v.role as Role,
-      accountStatus: 'ACTIVE',
+      accountStatus: 'ACTIVE', // akun buatan admin langsung aktif
       password: hashPassword(v.password),
-    },
-    select: { id: true, name: true, email: true, role: true, accountStatus: true, createdAt: true }
+    }
   });
   
-  return { ok: true, account: account as Account };
+  return { 
+    ok: true, 
+    account: { ...account, role: account.role as Role, accountStatus: account.accountStatus as AccountStatus } 
+  };
 }

@@ -5,27 +5,26 @@ import { CANCEL_DEADLINE_HOURS, type Reservation, type ReservationStatus } from 
 import { fromJakarta, nowInJakarta, toMinutes } from '@/lib/slots';
 import { validateReservation, type FieldErrors, type ReservationInput } from '@/lib/validation';
 
-/**
- * Logika reservasi milik pengguna (FR-03, FR-04, FR-05).
- * Setiap fungsi menerima pengguna yang sedang login dan hanya menyentuh data miliknya (AC-04).
- */
-
 export async function listUserReservations(user: SessionUser, status?: ReservationStatus) {
-  const where: any = { userId: user.id };
-  if (status) where.status = status;
-  return (await db.reservation.findMany({
-    where,
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }]
-  })) as Reservation[];
+  const records = await db.reservation.findMany({
+    where: {
+      userId: user.id,
+      ...(status && { status }),
+    },
+    orderBy: [
+      { createdAt: 'desc' },
+      { id: 'desc' },
+    ],
+  });
+  return records.map(r => ({ ...r, status: r.status as ReservationStatus }));
 }
 
-/** `null` bila tidak ada ATAU milik orang lain — keduanya diperlakukan sama agar tidak membocorkan data. */
 export async function getUserReservation(user: SessionUser, id: number) {
   const r = await db.reservation.findUnique({ where: { id } });
-  return r && r.userId === user.id ? (r as Reservation) : null;
+  if (!r || r.userId !== user.id) return null;
+  return { ...r, status: r.status as ReservationStatus };
 }
 
-/** BR-06: hanya PENDING/APPROVED, dan paling lambat CANCEL_DEADLINE_HOURS sebelum mulai. */
 export function cancelPolicy(r: Reservation, now = new Date()) {
   if (r.status !== 'PENDING' && r.status !== 'APPROVED') return { allowed: false, reason: null };
   const deadline = new Date(r.startTime.getTime() - CANCEL_DEADLINE_HOURS * 3600_000);
@@ -51,11 +50,9 @@ export async function createReservation(user: SessionUser, input: ReservationInp
   const facility = await getFacility(Number(input.facilityId));
   if (!facility) return { ok: false, errors: { facilityId: 'Fasilitas tidak ditemukan.' } };
   if (facility.status !== 'AKTIF') {
-    // BR-08, AC-07
     return { ok: false, errors: { facilityId: 'Fasilitas ini sedang dalam perbaikan dan tidak dapat direservasi.' } };
   }
 
-  // Semua slot dalam rentang harus tersedia. Pesan sengaja umum — tanpa detail pemohon lain (BR-05).
   const from = toMinutes(input.start);
   const to = toMinutes(input.end);
   const slots = await getAvailability(facility, input.date, now);
@@ -70,17 +67,17 @@ export async function createReservation(user: SessionUser, input: ReservationInp
   const startTime = fromJakarta(input.date, input.start);
   const endTime = fromJakarta(input.date, input.end);
 
-  // Cegah pengajuan ganda dari pengguna yang sama pada jadwal yang tumpang tindih
-  const duplicates = await db.reservation.findMany({
+  const duplicate = await db.reservation.findFirst({
     where: {
       userId: user.id,
       facilityId: facility.id,
       status: { in: ['PENDING', 'APPROVED'] },
       startTime: { lt: endTime },
-      endTime: { gt: startTime }
+      endTime: { gt: startTime },
     }
   });
-  if (duplicates.length > 0) {
+
+  if (duplicate) {
     return { ok: false, errors: { start: 'Anda sudah punya pengajuan di fasilitas ini pada jam yang tumpang tindih.' } };
   }
 
@@ -94,18 +91,20 @@ export async function createReservation(user: SessionUser, input: ReservationInp
       status: 'PENDING',
     }
   });
+  
   return { ok: true, id: reservation.id };
 }
 
 export async function cancelReservation(user: SessionUser, id: number) {
   const r = await getUserReservation(user, id);
   if (!r) return { ok: false as const, message: 'Reservasi tidak ditemukan.' };
+  
   const policy = cancelPolicy(r);
   if (!policy.allowed) return { ok: false as const, message: policy.reason ?? 'Reservasi ini tidak dapat dibatalkan.' };
   
   await db.reservation.update({
     where: { id },
-    data: { status: 'CANCELLED' }
+    data: { status: 'CANCELLED' },
   });
   
   return { ok: true as const };

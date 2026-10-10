@@ -21,35 +21,35 @@ export interface FacilityFilter {
   minCapacity?: number;
 }
 
-function visible(f: Facility) {
-  return f.status !== "NONAKTIF";
-}
-
 export async function listFacilities(filter: FacilityFilter = {}): Promise<Facility[]> {
-  const q = filter.q?.trim().toLowerCase();
+  const q = filter.q?.trim();
   
-  const where: any = { status: { not: "NONAKTIF" } };
-  if (filter.type && isFacilityType(filter.type)) where.type = filter.type;
-  if (filter.location) where.location = filter.location;
-  if (filter.minCapacity) where.capacity = { gte: filter.minCapacity };
-
-  let facilities = (await db.facility.findMany({ where, orderBy: { id: 'asc' } })) as Facility[];
-  
-  if (q) {
-    facilities = facilities.filter((f) => f.name.toLowerCase().includes(q));
-  }
-  
-  return facilities;
+  const records = await db.facility.findMany({
+    where: {
+      status: { not: "NONAKTIF" },
+      ...(q && { name: { contains: q, mode: 'insensitive' } }),
+      ...(isFacilityType(filter.type) && { type: filter.type }),
+      ...(filter.location && { location: filter.location }),
+      ...(filter.minCapacity && { capacity: { gte: filter.minCapacity } }),
+    },
+    orderBy: { name: 'asc' },
+  });
+  return records.map((f) => ({
+    ...f,
+    type: f.type as Facility["type"],
+    status: f.status as FacilityStatus,
+  }));
 }
 
 export async function getFacility(id: number): Promise<Facility | null> {
-  const f = await db.facility.findUnique({ where: { id } }) as Facility | null;
-  return f && visible(f) ? f : null;
+  const f = await db.facility.findUnique({ where: { id } });
+  if (!f || f.status === "NONAKTIF") return null;
+  return { ...f, type: f.type as Facility["type"], status: f.status as FacilityStatus };
 }
 
 export async function setFacilityStatus(id: number, status: Extract<FacilityStatus, "AKTIF" | "PERBAIKAN">) {
-  const f = await getFacility(id);
-  if (!f) return false;
+  const f = await db.facility.findUnique({ where: { id } });
+  if (!f || f.status === "NONAKTIF") return false;
   await db.facility.update({ where: { id }, data: { status } });
   return true;
 }
@@ -63,11 +63,14 @@ export async function listLocations(): Promise<string[]> {
 /* ------------------------------------------------------------------ */
 
 export async function listAllFacilities(): Promise<Facility[]> {
-  return (await db.facility.findMany({ orderBy: { id: 'asc' } })) as Facility[];
+  const records = await db.facility.findMany({ orderBy: { name: 'asc' } });
+  return records.map((f) => ({ ...f, type: f.type as Facility["type"], status: f.status as FacilityStatus }));
 }
 
 export async function findFacility(id: number): Promise<Facility | null> {
-  return (await db.facility.findUnique({ where: { id } })) as Facility | null;
+  const f = await db.facility.findUnique({ where: { id } });
+  if (!f) return null;
+  return { ...f, type: f.type as Facility["type"], status: f.status as FacilityStatus };
 }
 
 export type UpdateFacilityResult =
@@ -130,35 +133,33 @@ export async function setFacilityActive(id: number, active: boolean) {
 }
 
 export async function getAvailability(
-  f: Facility,
+  f: { id: number; status?: FacilityStatus },
   date: string,
   now: { date: string; minute: number }
 ): Promise<Slot[]> {
-  const startOfDay = new Date(date + 'T00:00:00+07:00');
-  const endOfDay = new Date(date + 'T23:59:59+07:00');
-
-  const reservations = await db.reservation.findMany({
+  // Hanya reservasi APPROVED yang menandai slot terisi (BR-04, AC-03)
+  const approved = await db.reservation.findMany({
     where: {
       facilityId: f.id,
-      status: { in: ['PENDING', 'APPROVED'] },
-      startTime: { gte: startOfDay, lte: endOfDay }
+      status: "APPROVED",
     }
   });
 
-  const booked = new Set<string>();
-  for (const r of reservations) {
-    const s = toJakarta(r.startTime);
-    const from = toMinutes(s.time);
-    const to = toMinutes(toJakarta(r.endTime).time);
-    for (const t of slotTimes()) {
-      const m = toMinutes(t.start);
-      if (m >= from && m < to) booked.add(t.start);
-    }
-  }
+  const approvedIntervals = approved
+    .map(r => {
+      const s = toJakarta(r.startTime);
+      const e = toJakarta(r.endTime);
+      if (s.date !== date) return null;
+      return { from: toMinutes(s.time), to: toMinutes(e.time) };
+    })
+    .filter(Boolean) as { from: number; to: number }[];
 
   return slotTimes().map(({ start, end }) => {
-    let state: Slot['state'] = booked.has(start) ? 'terisi' : 'tersedia';
-    if (f.status !== 'AKTIF') state = 'terisi';
+    const m = toMinutes(start);
+    const taken = approvedIntervals.some((r) => m >= r.from && m < r.to);
+    let state: Slot['state'] = taken ? 'terisi' : 'tersedia';
+    // BR-08, AC-07: Fasilitas tidak aktif atau dalam perbaikan tidak tersedia
+    if (f.status && f.status !== 'AKTIF') state = 'terisi';
     if (date === now.date && toMinutes(start) <= now.minute) state = 'lewat';
     return { start, end, state };
   });

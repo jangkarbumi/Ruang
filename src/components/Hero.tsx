@@ -4,8 +4,13 @@ import { ArrowRight } from 'lucide-react';
 import { listFacilities } from '@/server/services/facility-service';
 
 export default async function Hero() {
-  const facilities = await listFacilities();
-  const highlightGedung = facilities.filter(f => f.imageUrl).slice(0, 2);
+  let highlightGedung: Awaited<ReturnType<typeof listFacilities>> = [];
+  try {
+    const facilities = await listFacilities();
+    highlightGedung = facilities.filter(f => f.imageUrl).slice(0, 2);
+  } catch {
+    highlightGedung = [];
+  }
 
   return (
     <main

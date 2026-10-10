@@ -1,6 +1,5 @@
 import { db } from '@/server/db';
 import type { Reservation } from '@/lib/reservation';
-import { findUser } from '@/server/services/staff-service';
 import { listAllFacilities } from '@/server/services/facility-service';
 import { locationLabel, type Facility } from '@/lib/facility';
 import { RESERVATION_STATUS, reservationCode, type ReservationStatus } from '@/lib/reservation';
@@ -31,8 +30,6 @@ export function parseRange(dari: unknown, sampai: unknown, today: string): Range
   if (to > addDays(from, RANGE_MAX_DAYS - 1)) return { ...fallback, error: `Periode maksimal ${RANGE_MAX_DAYS} hari.` };
   return { from, to };
 }
-
-const inRange = (date: string, r: Range) => date >= r.from && date <= r.to;
 
 async function facilityMap() {
   return new Map<number, Facility>((await listAllFacilities()).map((f) => [f.id, f]));
@@ -121,13 +118,17 @@ const stamp = (d: Date) => {
 };
 
 export async function reservationsCsv(range: Range) {
-  const [items, facilities] = await Promise.all([reservationsIn(range), facilityMap()]);
-  const rows = await Promise.all(items.map(async (r) => {
+  const [items, facilities, users] = await Promise.all([
+    reservationsIn(range),
+    facilityMap(),
+    db.user.findMany().then((list) => new Map(list.map((u) => [u.id, u]))),
+  ]);
+  const rows = items.map((r) => {
     const f = facilities.get(r.facilityId);
     const s = toJakarta(r.startTime);
     const e = toJakarta(r.endTime);
-    const u = await findUser(r.userId);
-    const decidedBy = await findUser(r.decidedById);
+    const u = users.get(r.userId);
+    const decidedBy = r.decidedById ? users.get(r.decidedById) : undefined;
     return [
       reservationCode(r.id),
       f?.name ?? `Fasilitas #${r.facilityId}`,
@@ -144,7 +145,7 @@ export async function reservationsCsv(range: Range) {
       decidedBy?.name ?? '',
       stamp(r.createdAt),
     ];
-  }));
+  });
   return toCsv(
     ['Kode', 'Fasilitas', 'Lokasi', 'Tanggal', 'Mulai', 'Selesai', 'Durasi (jam)', 'Pemohon', 'Email pemohon', 'Tujuan', 'Status', 'Alasan pembatalan', 'Diputuskan oleh', 'Diajukan pada'],
     rows,
@@ -152,11 +153,15 @@ export async function reservationsCsv(range: Range) {
 }
 
 export async function reportsCsv(range: Range) {
-  const [items, facilities] = await Promise.all([reportsIn(range), facilityMap()]);
-  const rows = await Promise.all(items.map(async (r) => {
+  const [items, facilities, users] = await Promise.all([
+    reportsIn(range),
+    facilityMap(),
+    db.user.findMany().then((list) => new Map(list.map((u) => [u.id, u]))),
+  ]);
+  const rows = items.map((r) => {
     const f = facilities.get(r.facilityId);
-    const reporter = await findUser(r.reporterId);
-    const handler = await findUser(r.handledById);
+    const reporter = users.get(r.reporterId);
+    const handler = r.handledById ? users.get(r.handledById) : undefined;
     return [
       reportCode(r.id),
       f?.name ?? `Fasilitas #${r.facilityId}`,
@@ -170,7 +175,7 @@ export async function reportsCsv(range: Range) {
       handler?.name ?? '',
       stamp(r.createdAt),
     ];
-  }));
+  });
   return toCsv(
     ['Kode', 'Fasilitas', 'Lokasi', 'Kategori', 'Deskripsi', 'Ada foto', 'Status', 'Catatan penanganan', 'Pelapor', 'Ditangani oleh', 'Dilaporkan pada'],
     rows,

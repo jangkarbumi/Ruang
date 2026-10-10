@@ -2,8 +2,8 @@ import { REJECTION_REASON_MIN } from '@/lib/reservation';
 import { getAvailability, getFacility } from '@/server/services/facility-service';
 import type { SessionUser } from '@/server/session';
 import type { Account, Role } from '@/lib/account';
-import type { Reservation, ReservationStatus } from '@/lib/reservation';
-import type { ReportStatus, Report } from '@/lib/report';
+import type { ReservationStatus } from '@/lib/reservation';
+import type { ReportStatus } from '@/lib/report';
 import { nowInJakarta, toJakarta, toMinutes } from '@/lib/slots';
 
 /**
@@ -21,44 +21,54 @@ export async function findUser(id: number | null): Promise<Account | null> {
 /* ---------------------------- Reservasi ---------------------------- */
 
 export async function listReservations(status?: ReservationStatus) {
-  const where: any = {};
-  if (status) where.status = status;
-  return (await db.reservation.findMany({
-    where,
+  const records = await db.reservation.findMany({
+    where: { ...(status && { status }) },
     orderBy: status === 'PENDING' 
       ? { startTime: 'asc' } 
-      : [{ createdAt: 'desc' }, { id: 'desc' }]
-  })) as Reservation[];
+      : [{ createdAt: 'desc' }, { id: 'desc' }],
+  });
+  return records.map(r => ({ ...r, status: r.status as ReservationStatus }));
 }
 
 export async function getReservation(id: number) {
-  return (await db.reservation.findUnique({ where: { id } })) as Reservation | null;
+  const r = await db.reservation.findUnique({ where: { id } });
+  if (!r) return null;
+  return { ...r, status: r.status as ReservationStatus };
 }
-
-const overlaps = (a: Reservation, b: Reservation) =>
-  a.id !== b.id && a.facilityId === b.facilityId && a.startTime < b.endTime && b.startTime < a.endTime;
 
 /**
  * Konflik untuk satu pengajuan:
  * - `blocking`: reservasi lain yang SUDAH disetujui / slot terisi → tidak boleh disetujui (BR-04, AC-03)
  * - `competing`: pengajuan lain yang masih menunggu di jam yang sama → menyetujui ini membuat yang lain bentrok
  */
-export async function conflictsFor(r: Reservation) {
-  const others = (await db.reservation.findMany({
+export async function conflictsFor(r: { id: number; facilityId: number; startTime: Date; endTime: Date }) {
+  const others = await db.reservation.findMany({
     where: {
       id: { not: r.id },
       facilityId: r.facilityId,
       startTime: { lt: r.endTime },
-      endTime: { gt: r.startTime }
+      endTime: { gt: r.startTime },
     }
-  })) as Reservation[];
+  });
   const approved = others.filter((x) => x.status === 'APPROVED');
+
   const facility = await getFacility(r.facilityId);
-  const slotTaken = facility ? facility.status !== 'AKTIF' : true;
+  const start = toJakarta(r.startTime);
+  const end = toJakarta(r.endTime);
+  let slotTaken = false;
+  if (facility) {
+    const slots = await getAvailability(facility, start.date, { date: '0000-00-00', minute: 0 });
+    const from = toMinutes(start.time);
+    const to = toMinutes(end.time);
+    slotTaken = slots.some((s) => {
+      const m = toMinutes(s.start);
+      return m >= from && m < to && s.state === 'terisi';
+    });
+  }
 
   return {
     blocking: approved,
-    slotTaken,
+    slotTaken: slotTaken && approved.length === 0,
     competing: others.filter((x) => x.status === 'PENDING'),
   };
 }
@@ -109,8 +119,9 @@ export async function approveReservation(officer: SessionUser, id: number): Prom
     }, {
       isolationLevel: 'Serializable'
     });
-  } catch (e: any) {
-    if (e.code === 'P2034' || (e.message && e.message.includes('40001')) || (e.cause && e.cause.originalCode === '40001')) {
+  } catch (e: unknown) {
+    const err = e as { code?: string; message?: string; cause?: { originalCode?: string } };
+    if (err.code === 'P2034' || (err.message && err.message.includes('40001')) || (err.cause && err.cause.originalCode === '40001')) {
       return { ok: false, message: 'Jadwal ini bentrok dengan reservasi lain yang sudah disetujui.' };
     }
     throw e;
@@ -168,16 +179,17 @@ export async function cancelUrgent(officer: SessionUser, id: number, reason: str
 /* ----------------------------- Laporan ----------------------------- */
 
 export async function listReports(status?: ReportStatus) {
-  const where: any = {};
-  if (status) where.status = status;
-  return (await db.report.findMany({
-    where,
-    orderBy: { createdAt: 'desc' }
-  })) as Report[];
+  const records = await db.report.findMany({
+    where: { ...(status && { status }) },
+    orderBy: { createdAt: 'desc' },
+  });
+  return records.map(r => ({ ...r, status: r.status as ReportStatus }));
 }
 
 export async function getReport(id: number) {
-  return (await db.report.findUnique({ where: { id } })) as Report | null;
+  const r = await db.report.findUnique({ where: { id } });
+  if (!r) return null;
+  return { ...r, status: r.status as ReportStatus };
 }
 
 /** Alur status (AC-06): Baru → Diproses → Selesai/Ditolak. Baru boleh langsung Ditolak. Laporan tertutup tidak dibuka lagi. */
@@ -213,7 +225,7 @@ export async function updateReport(
     data: {
       status: next,
       handledById: officer.id,
-      resolutionNote: text || null
+      ...(text && { resolutionNote: text }),
     }
   });
   return { ok: true };
