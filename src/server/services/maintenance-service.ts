@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { db } from '@/server/db';
 import type { SessionUser } from '@/server/session';
 
@@ -126,73 +127,81 @@ export async function scheduleMaintenance(
   const startUtc = startOfDayJakarta(input.startDate);
   const endUtc = endOfDayJakarta(input.endDate);
 
-  return db.$transaction(async (tx) => {
-    // 1. Simpan jadwal perbaikan
-    const maintenance = await tx.maintenance.create({
-      data: {
-        facilityId: input.facilityId,
-        startDate: startUtc,
-        endDate: endUtc,
-        reason,
-        reportId: input.reportId ?? null,
-        createdById: officer.id,
-      },
-    });
-
-    // 2. Ambil reservasi yang bentrok
-    const conflicting = await tx.reservation.findMany({
-      where: {
-        facilityId: input.facilityId,
-        status: { in: ['APPROVED', 'PENDING'] },
-        startTime: { lt: endUtc },
-        endTime: { gt: startUtc },
-      },
-      select: { id: true, status: true },
-    });
-
-    const approvedIds = conflicting.filter((r) => r.status === 'APPROVED').map((r) => r.id);
-    const pendingIds = conflicting.filter((r) => r.status === 'PENDING').map((r) => r.id);
-
-    // 3. Batalkan darurat reservasi yang sudah disetujui (FR-10, BR-07, AC-05)
-    if (approvedIds.length > 0) {
-      await tx.reservation.updateMany({
-        where: { id: { in: approvedIds } },
+  try {
+    return await db.$transaction(async (tx) => {
+      // 1. Simpan jadwal perbaikan
+      const maintenance = await tx.maintenance.create({
         data: {
-          status: 'CANCELLED',
-          cancellationReason: `[Pemeliharaan Fasilitas Darurat] ${reason}`,
-          decidedById: officer.id,
+          facilityId: input.facilityId,
+          startDate: startUtc,
+          endDate: endUtc,
+          reason,
+          reportId: input.reportId ?? null,
+          createdById: officer.id,
         },
       });
-    }
 
-    // 4. Tolak pengajuan yang masih pending
-    if (pendingIds.length > 0) {
-      await tx.reservation.updateMany({
-        where: { id: { in: pendingIds } },
-        data: {
-          status: 'REJECTED',
-          rejectionReason: `[Fasilitas Dalam Perbaikan] ${reason}`,
-          decidedById: officer.id,
+      // 2. Ambil reservasi yang bentrok
+      const conflicting = await tx.reservation.findMany({
+        where: {
+          facilityId: input.facilityId,
+          status: { in: ['APPROVED', 'PENDING'] },
+          startTime: { lt: endUtc },
+          endTime: { gt: startUtc },
         },
+        select: { id: true, status: true },
       });
-    }
 
-    // 5. Update status fasilitas jika masa perbaikan mencakup hari ini
-    const now = new Date();
-    if (now >= startUtc && now <= endUtc) {
-      await tx.facility.update({
-        where: { id: input.facilityId },
-        data: { status: 'PERBAIKAN' },
-      });
-    }
+      const approvedIds = conflicting.filter((r) => r.status === 'APPROVED').map((r) => r.id);
+      const pendingIds = conflicting.filter((r) => r.status === 'PENDING').map((r) => r.id);
 
-    return {
-      ok: true as const,
-      maintenanceId: maintenance.id,
-      cancelledApprovedCount: approvedIds.length,
-      rejectedPendingCount: pendingIds.length,
-    };
-  });
+      // 3. Batalkan darurat reservasi yang sudah disetujui (FR-10, BR-07, AC-05)
+      if (approvedIds.length > 0) {
+        await tx.reservation.updateMany({
+          where: { id: { in: approvedIds } },
+          data: {
+            status: 'CANCELLED',
+            cancellationReason: `[Pemeliharaan Fasilitas Darurat] ${reason}`,
+            decidedById: officer.id,
+          },
+        });
+      }
+
+      // 4. Tolak pengajuan yang masih pending
+      if (pendingIds.length > 0) {
+        await tx.reservation.updateMany({
+          where: { id: { in: pendingIds } },
+          data: {
+            status: 'REJECTED',
+            rejectionReason: `[Fasilitas Dalam Perbaikan] ${reason}`,
+            decidedById: officer.id,
+          },
+        });
+      }
+
+      // 5. Update status fasilitas jika masa perbaikan mencakup hari ini
+      const now = new Date();
+      if (now >= startUtc && now <= endUtc) {
+        await tx.facility.update({
+          where: { id: input.facilityId },
+          data: { status: 'PERBAIKAN' },
+        });
+      }
+
+      return {
+        ok: true as const,
+        maintenanceId: maintenance.id,
+        cancelledApprovedCount: approvedIds.length,
+        rejectedPendingCount: pendingIds.length,
+      };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  } catch (e: unknown) {
+    const err = e as { code?: string; message?: string; cause?: { originalCode?: string } };
+    if (err.code === 'P2034' || (err.message && err.message.includes('40001')) || (err.cause && err.cause.originalCode === '40001')) {
+      return { ok: false, message: 'Gagal mengatur jadwal perbaikan karena ada perubahan reservasi di saat yang sama. Silakan coba lagi.' };
+    }
+    throw e;
+  }
 }
 
 export async function endMaintenance(officer: SessionUser, maintenanceId: number) {
