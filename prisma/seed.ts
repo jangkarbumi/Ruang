@@ -11,8 +11,6 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log('Seeding facilities...');
   
-  // Clear existing to avoid conflicts
-  await prisma.facility.deleteMany();
   
   let count = 0;
   for (const f of FACILITIES) {
