@@ -111,52 +111,57 @@ const stamp = (d: Date) => {
 
 export async function reservationsCsv(range: Range) {
   const [items, facilities] = await Promise.all([reservationsIn(range), facilityMap()]);
+  const rows = await Promise.all(items.map(async (r) => {
+    const f = facilities.get(r.facilityId);
+    const s = toJakarta(r.startTime);
+    const e = toJakarta(r.endTime);
+    const u = await findUser(r.userId);
+    const decidedBy = await findUser(r.decidedById);
+    return [
+      reservationCode(r.id),
+      f?.name ?? `Fasilitas #${r.facilityId}`,
+      f ? locationLabel(f.location) : '',
+      s.date,
+      s.time,
+      e.time,
+      (toMinutes(e.time) - toMinutes(s.time)) / 60,
+      u?.name ?? '',
+      u?.email ?? '',
+      r.purpose,
+      RESERVATION_STATUS[r.status].label,
+      r.cancellationReason,
+      decidedBy?.name ?? '',
+      stamp(r.createdAt),
+    ];
+  }));
   return toCsv(
     ['Kode', 'Fasilitas', 'Lokasi', 'Tanggal', 'Mulai', 'Selesai', 'Durasi (jam)', 'Pemohon', 'Email pemohon', 'Tujuan', 'Status', 'Alasan pembatalan', 'Diputuskan oleh', 'Diajukan pada'],
-    items.map((r) => {
-      const f = facilities.get(r.facilityId);
-      const s = toJakarta(r.startTime);
-      const e = toJakarta(r.endTime);
-      const u = findUser(r.userId);
-      return [
-        reservationCode(r.id),
-        f?.name ?? `Fasilitas #${r.facilityId}`,
-        f ? locationLabel(f.location) : '',
-        s.date,
-        s.time,
-        e.time,
-        (toMinutes(e.time) - toMinutes(s.time)) / 60,
-        u?.name ?? '',
-        u?.email ?? '',
-        r.purpose,
-        RESERVATION_STATUS[r.status].label,
-        r.cancellationReason,
-        findUser(r.decidedById)?.name ?? '',
-        stamp(r.createdAt),
-      ];
-    }),
+    rows,
   );
 }
 
 export async function reportsCsv(range: Range) {
   const [items, facilities] = await Promise.all([reportsIn(range), facilityMap()]);
+  const rows = await Promise.all(items.map(async (r) => {
+    const f = facilities.get(r.facilityId);
+    const reporter = await findUser(r.reporterId);
+    const handler = await findUser(r.handledById);
+    return [
+      reportCode(r.id),
+      f?.name ?? `Fasilitas #${r.facilityId}`,
+      f ? locationLabel(f.location) : '',
+      r.category,
+      r.description,
+      r.photo ? 'Ya' : 'Tidak',
+      REPORT_STATUS[r.status].label,
+      r.resolutionNote,
+      reporter?.name ?? '',
+      handler?.name ?? '',
+      stamp(r.createdAt),
+    ];
+  }));
   return toCsv(
     ['Kode', 'Fasilitas', 'Lokasi', 'Kategori', 'Deskripsi', 'Ada foto', 'Status', 'Catatan penanganan', 'Pelapor', 'Ditangani oleh', 'Dilaporkan pada'],
-    items.map((r) => {
-      const f = facilities.get(r.facilityId);
-      return [
-        reportCode(r.id),
-        f?.name ?? `Fasilitas #${r.facilityId}`,
-        f ? locationLabel(f.location) : '',
-        r.category,
-        r.description,
-        r.photo ? 'Ya' : 'Tidak',
-        REPORT_STATUS[r.status].label,
-        r.resolutionNote,
-        findUser(r.reporterId)?.name ?? '',
-        findUser(r.handledById)?.name ?? '',
-        stamp(r.createdAt),
-      ];
-    }),
+    rows,
   );
 }

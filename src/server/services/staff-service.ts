@@ -2,7 +2,7 @@ import { store } from '@/server/data/store';
 import { REJECTION_REASON_MIN } from '@/lib/reservation';
 import { getAvailability, getFacility } from '@/server/services/facility-service';
 import type { SessionUser } from '@/server/session';
-import type { Account } from '@/lib/account';
+import type { Account, Role } from '@/lib/account';
 import type { Reservation, ReservationStatus } from '@/lib/reservation';
 import type { ReportStatus } from '@/lib/report';
 import { nowInJakarta, toJakarta, toMinutes } from '@/lib/slots';
@@ -11,8 +11,12 @@ import { nowInJakarta, toJakarta, toMinutes } from '@/lib/slots';
  * Logika petugas fasilitas (FR-08 – FR-12). Semua pengecekan konflik dilakukan di server (NFR-06).
  */
 
-export function findUser(id: number | null): Account | undefined {
-  return id == null ? undefined : store().users.find((u) => u.id === id);
+import { db } from '@/server/db';
+
+export async function findUser(id: number | null): Promise<Account | null> {
+  if (id == null) return null;
+  const user = await db.user.findUnique({ where: { id } });
+  return user ? { id: user.id, name: user.name, email: user.email, role: user.role as Role, accountStatus: user.accountStatus, createdAt: user.createdAt } : null;
 }
 
 /* ---------------------------- Reservasi ---------------------------- */

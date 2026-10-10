@@ -12,14 +12,11 @@ import { addDays, fromJakarta, nowInJakarta, toJakarta, toMinutes } from '@/lib/
  */
 
 interface Store {
-  users: Account[];
   /** Hash password per id akun — dipisah dari data akun agar tidak ikut terkirim ke tampilan. */
-  passwords: Record<number, string>;
   reservations: Reservation[];
   reports: Report[];
   /** Status fasilitas yang diubah petugas (FR-12), menimpa nilai di data fasilitas. */
   /** Perubahan data fasilitas oleh admin (FR-16), menimpa nilai di data fasilitas. */
-  nextUserId: number;
   nextReservationId: number;
   nextReportId: number;
 }
@@ -163,34 +160,12 @@ function seed(): Store {
     createdAt: at(0, '08:10'),
   });
 
-  const user = (id: number, name: string, email: string, role: Account['role'], accountStatus: Account['accountStatus'], daysAgo: number): Account => ({
-    id,
-    name,
-    email,
-    role,
-    accountStatus,
-    createdAt: at(-daysAgo, '09:00'),
-  });
   // Nama & email contoh (fiktif)
-  const users = [
-    user(DEMO_USER_ID, 'Pengguna Demo', 'pengguna@students.undip.ac.id', 'PENGGUNA', 'ACTIVE', 60),
-    user(OTHER_USER_ID, 'Rina Maharani', 'rina.maharani@students.undip.ac.id', 'PENGGUNA', 'ACTIVE', 45),
-    user(THIRD_USER_ID, 'Dimas Saputra', 'dimas.saputra@students.undip.ac.id', 'PENGGUNA', 'ACTIVE', 30),
-    user(DEMO_OFFICER_ID, 'Sri Wahyuni', 'sri.wahyuni@undip.ac.id', 'PETUGAS', 'ACTIVE', 120),
-    // Email sama dengan petunjuk "Demo login" di halaman login
-    user(DEMO_ADMIN_ID, 'Admin Fasilitas', 'admin@campus.edu', 'ADMIN', 'ACTIVE', 200),
-    // Registrasi mandiri yang menunggu verifikasi admin (FR-15)
-    user(501, 'Bagas Pratama', 'bagas.pratama@students.undip.ac.id', 'PENGGUNA', 'PENDING', 1),
-    user(502, 'Dewi Lestari', 'dewi.lestari@lecturer.undip.ac.id', 'PENGGUNA', 'PENDING', 2),
-  ];
 
   return {
-    users,
     reservations,
     reports,
     // Semua akun contoh memakai password "password123"
-    passwords: Object.fromEntries(users.map((u) => [u.id, hashPassword('password123')])),
-    nextUserId: 600,
     nextReservationId: rid + 1,
     nextReportId: pid + 1,
   };

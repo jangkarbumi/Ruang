@@ -20,7 +20,7 @@ export default async function OfficerReportsPage(props: PageProps<'/petugas/lapo
   const all = await listReports();
   const items = await listReports(status);
   const rows = await Promise.all(
-    items.map(async (r) => ({ r, facility: await findFacility(r.facilityId), reporter: findUser(r.reporterId)?.name })),
+    items.map(async (r) => ({ r, facility: await findFacility(r.facilityId), reporter: (await findUser(r.reporterId))?.name })),
   );
   const tabs = [
     { value: '', label: 'Semua', count: all.length },
