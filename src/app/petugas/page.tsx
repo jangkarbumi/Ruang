@@ -27,14 +27,14 @@ export default async function OfficerDashboardPage() {
       return {
         r,
         facility: await findFacility(r.facilityId),
-        requester: findUser(r.userId)?.name,
+        requester: (await findUser(r.userId))?.name,
         conflict: c.blocking.length > 0 || c.slotTaken,
       };
     }),
   );
   const openReports = [...baru, ...diproses].slice(0, 5);
   const reportRows = await Promise.all(
-    openReports.map(async (r) => ({ r, facility: await findFacility(r.facilityId), reporter: findUser(r.reporterId)?.name })),
+    openReports.map(async (r) => ({ r, facility: await findFacility(r.facilityId), reporter: (await findUser(r.reporterId))?.name })),
   );
 
   const stats = [

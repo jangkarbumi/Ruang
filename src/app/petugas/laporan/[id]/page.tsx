@@ -26,8 +26,8 @@ export default async function OfficerReportDetailPage(props: PageProps<'/petugas
   if (!r) notFound();
 
   const facility = await findFacility(r.facilityId);
-  const reporter = findUser(r.reporterId);
-  const handler = findUser(r.handledById);
+  const reporter = await findUser(r.reporterId);
+  const handler = await findUser(r.handledById);
   const created = toJakarta(r.createdAt);
   const back = `/petugas/laporan/${r.id}`;
 

@@ -31,11 +31,14 @@ export default async function OfficerReservationDetailPage(props: PageProps<'/pe
   if (!r) notFound();
 
   const facility = await findFacility(r.facilityId);
-  const requester = findUser(r.userId);
-  const decidedBy = findUser(r.decidedById);
+  const requester = await findUser(r.userId);
+  const decidedBy = await findUser(r.decidedById);
   const start = toJakarta(r.startTime);
   const end = toJakarta(r.endTime);
   const c = await conflictsFor(r);
+  const competingUsers = new Map(
+    await Promise.all(c.competing.map(async (x) => [x.id, await findUser(x.userId)] as const))
+  );
   const facilityBlocked = facility && facility.status !== 'AKTIF';
 
   const blockedReason =
@@ -142,7 +145,7 @@ export default async function OfficerReservationDetailPage(props: PageProps<'/pe
                         <Link href={`/petugas/reservasi/${x.id}`} className="font-bold underline">
                           {reservationCode(x.id)}
                         </Link>{' '}
-                        oleh {findUser(x.userId)?.name ?? 'pengguna'} ({formatTime(toJakarta(x.startTime).time)}–
+                        oleh {competingUsers.get(x.id)?.name ?? 'pengguna'} ({formatTime(toJakarta(x.startTime).time)}–
                         {formatTime(toJakarta(x.endTime).time)})
                       </span>
                     </li>
