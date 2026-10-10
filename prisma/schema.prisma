@@ -66,6 +66,7 @@ model User {
   reservationsDecided Reservation[] @relation("DecidedBy")
   reportsSubmitted    Report[]      @relation("ReportedBy")
   reportsHandled      Report[]      @relation("HandledBy")
+  maintenancesCreated Maintenance[]
 }
 
 model Facility {
@@ -80,6 +81,7 @@ model Facility {
 
   reservations Reservation[]
   reports      Report[]
+  maintenances Maintenance[]
 }
 
 model Reservation {
@@ -115,4 +117,22 @@ model Report {
   handledById    Int?
   handledBy      User?        @relation("HandledBy", fields: [handledById], references: [id])
   createdAt      DateTime     @default(now())
+
+  maintenances Maintenance[]
+}
+
+model Maintenance {
+  id          Int       @id @default(autoincrement())
+  facilityId  Int
+  facility    Facility  @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  startDate   DateTime
+  endDate     DateTime
+  reason      String
+  reportId    Int?
+  report      Report?   @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  createdById Int
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+
+  @@index([facilityId, startDate, endDate])
 }

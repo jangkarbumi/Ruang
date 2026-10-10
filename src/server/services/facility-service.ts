@@ -138,12 +138,21 @@ export async function getAvailability(
   now: { date: string; minute: number }
 ): Promise<Slot[]> {
   // Hanya reservasi APPROVED yang menandai slot terisi (BR-04, AC-03)
-  const approved = await db.reservation.findMany({
-    where: {
-      facilityId: f.id,
-      status: "APPROVED",
-    }
-  });
+  const [approved, maintenance] = await Promise.all([
+    db.reservation.findMany({
+      where: {
+        facilityId: f.id,
+        status: "APPROVED",
+      }
+    }),
+    db.maintenance.findFirst({
+      where: {
+        facilityId: f.id,
+        startDate: { lte: new Date(`${date}T23:59:59+07:00`) },
+        endDate: { gte: new Date(`${date}T00:00:00+07:00`) },
+      }
+    })
+  ]);
 
   const approvedIntervals = approved
     .map(r => {
@@ -158,8 +167,8 @@ export async function getAvailability(
     const m = toMinutes(start);
     const taken = approvedIntervals.some((r) => m >= r.from && m < r.to);
     let state: Slot['state'] = taken ? 'terisi' : 'tersedia';
-    // BR-08, AC-07: Fasilitas tidak aktif atau dalam perbaikan tidak tersedia
-    if (f.status && f.status !== 'AKTIF') state = 'terisi';
+    // BR-08, AC-07: Fasilitas tidak aktif atau dalam jadwal perbaikan tidak tersedia
+    if ((f.status && f.status !== 'AKTIF') || Boolean(maintenance)) state = 'terisi';
     if (date === now.date && toMinutes(start) <= now.minute) state = 'lewat';
     return { start, end, state };
   });

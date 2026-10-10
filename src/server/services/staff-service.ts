@@ -93,6 +93,17 @@ export async function approveReservation(officer: SessionUser, id: number): Prom
         return { ok: false, message: 'Waktu reservasi sudah lewat.' };
       }
       
+      const maintenance = await tx.maintenance.findFirst({
+        where: {
+          facilityId: r.facilityId,
+          startDate: { lt: r.endTime },
+          endDate: { gt: r.startTime },
+        }
+      });
+      if (maintenance) {
+        return { ok: false, message: `Fasilitas sedang dalam perbaikan pada waktu tersebut: "${maintenance.reason}".` };
+      }
+
       const overlappingApproved = await tx.reservation.findMany({
         where: {
           id: { not: r.id },

@@ -53,6 +53,20 @@ export async function createReservation(user: SessionUser, input: ReservationInp
     return { ok: false, errors: { facilityId: 'Fasilitas ini sedang dalam perbaikan dan tidak dapat direservasi.' } };
   }
 
+  const startTime = fromJakarta(input.date, input.start);
+  const endTime = fromJakarta(input.date, input.end);
+
+  const maintenance = await db.maintenance.findFirst({
+    where: {
+      facilityId: facility.id,
+      startDate: { lt: endTime },
+      endDate: { gt: startTime },
+    }
+  });
+  if (maintenance) {
+    return { ok: false, errors: { start: `Fasilitas ini sedang dalam jadwal perbaikan pada tanggal tersebut: "${maintenance.reason}".` } };
+  }
+
   const from = toMinutes(input.start);
   const to = toMinutes(input.end);
   const slots = await getAvailability(facility, input.date, now);
@@ -63,9 +77,6 @@ export async function createReservation(user: SessionUser, input: ReservationInp
   if (clash) {
     return { ok: false, errors: { start: 'Sebagian rentang waktu ini sudah terisi. Pilih jam lain.' } };
   }
-
-  const startTime = fromJakarta(input.date, input.start);
-  const endTime = fromJakarta(input.date, input.end);
 
   const duplicate = await db.reservation.findFirst({
     where: {

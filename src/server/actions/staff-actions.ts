@@ -55,6 +55,11 @@ export async function updateReportAction(_prev: ReportUpdateState, fd: FormData)
   redirect(`/petugas/laporan/${id}?hasil=diperbarui`);
 }
 
+import {
+  scheduleMaintenance,
+  endMaintenance,
+} from '@/server/services/maintenance-service';
+
 export async function setFacilityStatusAction(fd: FormData) {
   await requireRole('PETUGAS');
   const id = Number(fd.get('id'));
@@ -64,4 +69,51 @@ export async function setFacilityStatusAction(fd: FormData) {
   const back = String(fd.get('back') ?? '/petugas/fasilitas');
   // Hanya izinkan kembali ke halaman petugas sendiri
   redirect(back.startsWith('/petugas') ? back : '/petugas/fasilitas');
+}
+
+export interface MaintenanceActionState {
+  message?: string;
+  errors?: Record<string, string>;
+}
+
+export async function scheduleMaintenanceAction(
+  _prev: MaintenanceActionState,
+  fd: FormData
+): Promise<MaintenanceActionState> {
+  const officer = await requireRole('PETUGAS');
+  const facilityId = Number(fd.get('facilityId'));
+  const startDate = String(fd.get('startDate') ?? '');
+  const endDate = String(fd.get('endDate') ?? '');
+  const reason = String(fd.get('reason') ?? '');
+  const reportIdRaw = fd.get('reportId');
+  const reportId = reportIdRaw ? Number(reportIdRaw) : null;
+  const back = String(fd.get('back') ?? '/petugas/fasilitas');
+
+  const res = await scheduleMaintenance(officer, {
+    facilityId,
+    startDate,
+    endDate,
+    reason,
+    reportId,
+  });
+
+  if (!res.ok) {
+    return { message: res.message, errors: res.errors };
+  }
+
+  refreshAll();
+  const sep = back.includes('?') ? '&' : '?';
+  const query = `maintenance=sukses&batal=${res.cancelledApprovedCount}&tolak=${res.rejectedPendingCount}`;
+  redirect(`${back}${sep}${query}`);
+}
+
+export async function endMaintenanceAction(fd: FormData) {
+  const officer = await requireRole('PETUGAS');
+  const maintenanceId = Number(fd.get('maintenanceId'));
+  const back = String(fd.get('back') ?? '/petugas/fasilitas');
+
+  await endMaintenance(officer, maintenanceId);
+  refreshAll();
+  const sep = back.includes('?') ? '&' : '?';
+  redirect(`${back}${sep}maintenance=selesai`);
 }

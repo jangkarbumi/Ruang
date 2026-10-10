@@ -10,10 +10,12 @@ import { ReportBadge } from '@/components/user/StatusBadge';
 import { requireRole } from '@/server/session';
 import { findFacility } from '@/server/services/facility-service';
 import { allowedNextStatuses, findUser, getReport } from '@/server/services/staff-service';
-import { setFacilityStatusAction } from '@/server/actions/staff-actions';
+import { getActiveFacilityMaintenance } from '@/server/services/maintenance-service';
 import { locationLabel } from '@/lib/facility';
 import { reportCode } from '@/lib/report';
 import { formatDateLong, formatTime, toJakarta } from '@/lib/slots';
+
+import FacilityMaintenanceManager from '@/components/staff/FacilityMaintenanceManager';
 
 export async function generateMetadata(props: PageProps<'/petugas/laporan/[id]'>) {
   return { title: `${reportCode(Number((await props.params).id) || 0)} | Petugas | Ruang` };
@@ -25,9 +27,12 @@ export default async function OfficerReportDetailPage(props: PageProps<'/petugas
   const r = Number.isInteger(Number(id)) ? await getReport(Number(id)) : null;
   if (!r) notFound();
 
-  const facility = await findFacility(r.facilityId);
-  const reporter = await findUser(r.reporterId);
-  const handler = await findUser(r.handledById);
+  const [facility, reporter, handler, maintenance] = await Promise.all([
+    findFacility(r.facilityId),
+    findUser(r.reporterId),
+    findUser(r.handledById),
+    getActiveFacilityMaintenance(r.facilityId),
+  ]);
   const created = toJakarta(r.createdAt);
   const back = `/petugas/laporan/${r.id}`;
 
@@ -52,6 +57,16 @@ export default async function OfficerReportDetailPage(props: PageProps<'/petugas
       <div className="relative z-20 w-full max-w-300 mx-auto px-4 -mt-8 pb-20 grid gap-6 lg:grid-cols-[1.7fr_1fr]">
         <div className="space-y-6">
           {sp.hasil === 'diperbarui' && <Notice tone="success">Status laporan diperbarui.</Notice>}
+          {sp.maintenance === 'sukses' && (
+            <Notice tone="success">
+              Jadwal perbaikan darurat diterapkan.
+              {Number(sp.batal) > 0 && ` ${sp.batal} reservasi disetujui dibatalkan otomatis.`}
+              {Number(sp.tolak) > 0 && ` ${sp.tolak} pengajuan menunggu ditolak otomatis.`}
+            </Notice>
+          )}
+          {sp.maintenance === 'selesai' && (
+            <Notice tone="success">Masa perbaikan diselesaikan. Fasilitas kembali aktif.</Notice>
+          )}
 
           <section className="bg-white rounded-3xl border border-gray-100 shadow-lg p-6">
             <h2 className="text-lg font-bold text-[#001741]">Deskripsi Masalah</h2>
@@ -80,7 +95,7 @@ export default async function OfficerReportDetailPage(props: PageProps<'/petugas
             <ReportUpdateForm id={r.id} next={allowedNextStatuses(r.status)} />
           </div>
 
-          {/* FR-12: tandai fasilitas terkait tanpa pindah halaman */}
+          {/* FR-12: kelola perbaikan fasilitas terkait */}
           {facility && (
             <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
               <h2 className="text-xs font-semibold text-gray-500">Status fasilitas terkait</h2>
@@ -90,17 +105,13 @@ export default async function OfficerReportDetailPage(props: PageProps<'/petugas
                   {facility.status === 'AKTIF' ? 'Aktif' : 'Dalam perbaikan'}
                 </span>
               </p>
-              <form action={setFacilityStatusAction} className="mt-4">
-                <input type="hidden" name="id" value={facility.id} />
-                <input type="hidden" name="back" value={back} />
-                <input type="hidden" name="status" value={facility.status === 'AKTIF' ? 'PERBAIKAN' : 'AKTIF'} />
-                <button
-                  type="submit"
-                  className="w-full px-6 py-3 bg-white border border-gray-200 text-[#001741] rounded-2xl text-sm font-bold shadow-sm hover:shadow-md hover:bg-gray-50 transition"
-                >
-                  {facility.status === 'AKTIF' ? 'Tandai Dalam Perbaikan' : 'Kembalikan ke Aktif'}
-                </button>
-              </form>
+              <FacilityMaintenanceManager
+                facility={facility}
+                maintenance={maintenance}
+                reportId={r.id}
+                defaultReason={`Perbaikan terkait laporan #${r.id} (${r.category}): ${r.description}`}
+                backUrl={back}
+              />
             </div>
           )}
         </aside>
