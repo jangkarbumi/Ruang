@@ -54,25 +54,12 @@ export async function conflictsFor(r: Reservation) {
     }
   })) as Reservation[];
   const approved = others.filter((x) => x.status === 'APPROVED');
-
-  // Slot terisi di luar data reservasi (data jadwal contoh) juga dihitung sebagai bentrok
   const facility = await getFacility(r.facilityId);
-  const start = toJakarta(r.startTime);
-  const end = toJakarta(r.endTime);
-  let slotTaken = false;
-  if (facility) {
-    const slots = await getAvailability(facility, start.date, { date: '0000-00-00', minute: 0 });
-    const from = toMinutes(start.time);
-    const to = toMinutes(end.time);
-    slotTaken = slots.some((s) => {
-      const m = toMinutes(s.start);
-      return m >= from && m < to && s.state === 'terisi';
-    });
-  }
+  const slotTaken = facility ? facility.status !== 'AKTIF' : true;
 
   return {
     blocking: approved,
-    slotTaken: slotTaken && approved.length === 0,
+    slotTaken,
     competing: others.filter((x) => x.status === 'PENDING'),
   };
 }
@@ -80,56 +67,55 @@ export async function conflictsFor(r: Reservation) {
 type Result = { ok: true } | { ok: false; message: string };
 
 export async function approveReservation(officer: SessionUser, id: number): Promise<Result> {
-  // Race condition protection: We use an explicit Prisma transaction.
-  // By finding the reservation and any overlapping APPROVED reservations within the same transaction,
-  // we ensure that if two officers attempt to approve conflicting reservations concurrently,
-  // the database isolation guarantees atomic checking and updating.
-  // Wait, standard interactive transactions in Prisma don't automatically lock rows unless we use raw queries with FOR UPDATE.
-  // But we can check overlap and update in transaction. To be absolutely safe against race conditions,
-  // we can use Prisma's optimistic concurrency or executeRaw for locking, but for this app, doing it
-  // inside $transaction is enough as per requirement: "BUNGKUS pengecekan ulang + update status dalam prisma.$transaction()".
-  
-  return await db.$transaction(async (tx) => {
-    const r = await tx.reservation.findUnique({ where: { id } });
-    if (!r) return { ok: false, message: 'Reservasi tidak ditemukan.' };
-    if (r.status !== 'PENDING') return { ok: false, message: 'Hanya pengajuan berstatus Menunggu yang dapat disetujui.' };
-  
-    const facility = await tx.facility.findUnique({ where: { id: r.facilityId } });
-    if (!facility || facility.status !== 'AKTIF') {
-      return { ok: false, message: 'Fasilitas sedang dalam perbaikan atau tidak aktif, pengajuan tidak dapat disetujui.' };
-    }
+  try {
+    return await db.$transaction(async (tx) => {
+      const r = await tx.reservation.findUnique({ where: { id } });
+      if (!r) return { ok: false, message: 'Reservasi tidak ditemukan.' };
+      if (r.status !== 'PENDING') return { ok: false, message: 'Hanya pengajuan berstatus Menunggu yang dapat disetujui.' };
     
-    const now = nowInJakarta();
-    const start = toJakarta(r.startTime);
-    if (start.date < now.date || (start.date === now.date && toMinutes(start.time) <= now.minute)) {
-      return { ok: false, message: 'Waktu reservasi sudah lewat.' };
-    }
-    
-    // Check overlaps within transaction
-    const overlappingApproved = await tx.reservation.findMany({
-      where: {
-        id: { not: r.id },
-        facilityId: r.facilityId,
-        status: 'APPROVED',
-        startTime: { lt: r.endTime },
-        endTime: { gt: r.startTime }
+      const facility = await tx.facility.findUnique({ where: { id: r.facilityId } });
+      if (!facility || facility.status !== 'AKTIF') {
+        return { ok: false, message: 'Fasilitas sedang dalam perbaikan atau tidak aktif, pengajuan tidak dapat disetujui.' };
       }
+      
+      const now = nowInJakarta();
+      const start = toJakarta(r.startTime);
+      if (start.date < now.date || (start.date === now.date && toMinutes(start.time) <= now.minute)) {
+        return { ok: false, message: 'Waktu reservasi sudah lewat.' };
+      }
+      
+      const overlappingApproved = await tx.reservation.findMany({
+        where: {
+          id: { not: r.id },
+          facilityId: r.facilityId,
+          status: 'APPROVED',
+          startTime: { lt: r.endTime },
+          endTime: { gt: r.startTime }
+        }
+      });
+      
+      if (overlappingApproved.length > 0) {
+        return { ok: false, message: 'Jadwal ini bentrok dengan reservasi lain yang sudah disetujui.' };
+      }
+      
+      await tx.reservation.update({
+        where: { id: r.id },
+        data: {
+          status: 'APPROVED',
+          decidedById: officer.id
+        }
+      });
+      
+      return { ok: true };
+    }, {
+      isolationLevel: 'Serializable'
     });
-    
-    if (overlappingApproved.length > 0) {
+  } catch (e: any) {
+    if (e.code === 'P2034' || (e.message && e.message.includes('40001')) || (e.cause && e.cause.originalCode === '40001')) {
       return { ok: false, message: 'Jadwal ini bentrok dengan reservasi lain yang sudah disetujui.' };
     }
-    
-    await tx.reservation.update({
-      where: { id: r.id },
-      data: {
-        status: 'APPROVED',
-        decidedById: officer.id
-      }
-    });
-    
-    return { ok: true };
-  });
+    throw e;
+  }
 }
 
 export const REJECT_REASON_MIN = REJECTION_REASON_MIN;
